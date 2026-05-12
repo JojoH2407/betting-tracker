@@ -495,6 +495,9 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
         )}
       </div>
 
+      {/* Date */}
+      <Input label="Date" type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
+
       {/* Sport */}
       <div>
         <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Sport</div>
