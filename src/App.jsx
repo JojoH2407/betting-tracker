@@ -19,7 +19,7 @@ const SPORTS = Object.keys(SPORTS_CONFIG);
 const RESULTS = ["Pending", "Win", "Lose", "Void"];
 const RESULT_COLORS = { Win: "#22c55e", Lose: "#ef4444", Void: "#94a3b8", Pending: "#f59e0b" };
 
-const fmt = (n, d = 2) => n == null || isNaN(n) ? "–" : (n >= 0 ? "+" : "") + Number(n).toFixed(d);
+const fmt = (n, d = 2) => n == null || isNaN(n) ? "0.00" : (n >= 0 ? "+" : "") + Number(n).toFixed(d);
 const today = () => new Date().toISOString().slice(0, 10);
 
 const Ico = ({ d, size = 20 }) => (
@@ -39,7 +39,6 @@ export default function App() {
   const [tab, setTab] = useState("add");
   const [bets, setBets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterMonth, setFilterMonth] = useState("all");
   const [editId, setEditId] = useState(null);
   const [batchForms, setBatchForms] = useState([{ date: today(), sport: "Tennis", league: "ATP", subCat: "ML", bet: "", odd: "", stakeE: 60, stakeU: 1, result: "Pending" }]);
 
@@ -71,96 +70,115 @@ export default function App() {
     const file = e.target.files[0];
     const reader = new FileReader();
     reader.onload = async (evt) => {
-      const lines = evt.target.result.split("\n").slice(1);
-      const toInsert = lines.map(l => {
-        const parts = l.split(",");
-        if (parts.length < 8) return null;
+      const content = evt.target.result;
+      const lines = content.split("\n").filter(l => l.trim() !== "");
+      // On ignore le header s'il existe
+      const startIdx = (lines[0].toLowerCase().includes("date")) ? 1 : 0;
+      
+      const toInsert = lines.slice(startIdx).map(l => {
+        const p = l.split(",");
+        if (p.length < 6) return null;
         return {
-          date: parts[0], sport: parts[1], league: parts[2], subCat: parts[3], bet: parts[4],
-          odd: parseFloat(parts[5]), stakeE: parseFloat(parts[6]), stakeU: parseFloat(parts[7]), result: parts[8]?.trim() || "Pending"
+          date: p[0]?.trim() || today(),
+          sport: p[1]?.trim() || "Tennis",
+          league: p[2]?.trim() || "",
+          subCat: p[3]?.trim() || "",
+          bet: p[4]?.trim() || "Pari importé",
+          odd: parseFloat(p[5]) || 0,
+          stakeE: parseFloat(p[6]) || 60,
+          stakeU: parseFloat(p[7]) || 1,
+          result: p[8]?.trim() || "Pending"
         };
-      }).filter(x => x && !isNaN(x.odd));
-      const { data } = await supabase.from('bets').insert(toInsert).select();
-      if (data) setBets([...data, ...bets]);
+      }).filter(x => x && x.odd > 0);
+
+      if (toInsert.length > 0) {
+        const { data, error } = await supabase.from('bets').insert(toInsert).select();
+        if (error) alert("Erreur import: " + error.message);
+        if (data) setBets([...data, ...bets]);
+      }
     };
     reader.readAsText(file);
   };
 
-  const filtered = useMemo(() => filterMonth === "all" ? bets : bets.filter(b => b.date.startsWith(filterMonth)), [bets, filterMonth]);
-
   const stats = useMemo(() => {
     let pE = 0, invE = 0, wins = 0, settled = 0;
-    filtered.forEach(b => {
+    bets.forEach(b => {
       if (b.result === "Win") { pE += (b.odd - 1) * b.stakeE; wins++; settled++; invE += b.stakeE; }
       else if (b.result === "Lose") { pE -= b.stakeE; settled++; invE += b.stakeE; }
     });
-    return { profitE: pE, roi: invE ? (pE / invE) * 100 : 0, count: filtered.length, wr: settled ? (wins / settled) * 100 : 0 };
-  }, [filtered]);
+    return { profitE: pE, roi: invE ? (pE / invE) * 100 : 0, count: bets.length, wr: settled ? (wins / settled) * 100 : 0 };
+  }, [bets]);
 
-  if (loading) return <div style={{ height: "100vh", background: "#0a0f1e", display: "flex", alignItems: "center", justifyContent: "center", color: "#38bdf8" }}>Syncing Cloud...</div>;
+  if (loading) return <div style={{ height: "100vh", background: "#0a0f1e", display: "flex", alignItems: "center", justifyContent: "center", color: "#38bdf8", fontFamily: "sans-serif" }}>Chargement...</div>;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0f1e", color: "#e2e8f0", maxWidth: 500, margin: "0 auto", paddingBottom: 110 }}>
-      {/* HEADER AVEC IMPORT/EXPORT */}
-      <div style={{ padding: 20, background: "#0f172a", borderBottom: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h2 style={{ fontSize: 16, margin: 0, color: "#38bdf8" }}>BETTING TRACKER</h2>
-        <div style={{ display: "flex", gap: 20 }}>
-          <label style={{ cursor: "pointer" }}><Icons.Upload /><input type="file" hidden accept=".csv" onChange={importCSV} /></label>
-          <Icons.Download />
+    <div style={{ minHeight: "100vh", background: "#0a0f1e", color: "#f8fafc", maxWidth: 500, margin: "0 auto", paddingBottom: 120, fontFamily: "-apple-system, system-ui, sans-serif" }}>
+      
+      {/* HEADER FIXE */}
+      <div style={{ padding: "20px 15px", background: "#0f172a", borderBottom: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 10 }}>
+        <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: -0.5 }}>BetTracker <span style={{ color: "#38bdf8" }}>Cloud</span></div>
+        <div style={{ display: "flex", gap: 15 }}>
+           <label style={{ cursor: "pointer", color: "#94a3b8" }}><Icons.Upload /><input type="file" hidden accept=".csv" onChange={importCSV} /></label>
+           <button onClick={() => {}} style={{ background: "none", border: "none", color: "#94a3b8" }}><Icons.Download /></button>
         </div>
       </div>
 
       <div style={{ padding: 15 }}>
         {tab === "add" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <h3>{editId ? "Edit Bet" : "New Bets"}</h3>
-              {!editId && <button onClick={() => setBatchForms([...batchForms, { date: today(), sport: "Tennis", league: "ATP", subCat: "ML", bet: "", odd: "", stakeE: 60, stakeU: 1, result: "Pending" }])} style={{ background: "#1e293b", color: "#38bdf8", border: "none", padding: "8px 12px", borderRadius: 8 }}>+ Add Bet</button>}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0, fontSize: 20 }}>{editId ? "Modifier" : "Ajouter"}</h3>
+              {!editId && <button onClick={() => setBatchForms([...batchForms, { date: today(), sport: "Tennis", league: "ATP", subCat: "ML", bet: "", odd: "", stakeE: 60, stakeU: 1, result: "Pending" }])} style={{ background: "#1e293b", color: "#38bdf8", border: "none", padding: "8px 12px", borderRadius: 10, fontWeight: 600, fontSize: 13 }}>+ Ajouter une ligne</button>}
             </div>
+
             {batchForms.map((f, i) => (
-              <div key={i} style={{ background: "#111827", padding: 15, borderRadius: 14, border: "1px solid #1e293b", display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input type="date" value={f.date} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, date: e.target.value } : x))} style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 10, borderRadius: 10 }} />
-                  <select value={f.sport} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, sport: e.target.value } : x))} style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 10, borderRadius: 10 }}>
+              <div key={i} style={{ background: "#111827", padding: 15, borderRadius: 18, border: "1px solid #1e293b", display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <input type="date" value={f.date} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, date: e.target.value } : x))} style={{ flex: 1.2, background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 12, fontSize: 14 }} />
+                  <select value={f.sport} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, sport: e.target.value } : x))} style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 12, fontSize: 14 }}>
                     {SPORTS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <select value={f.league} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, league: e.target.value } : x))} style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 10, borderRadius: 10 }}>
+
+                <div style={{ display: "flex", gap: 10 }}>
+                  <select value={f.league} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, league: e.target.value } : x))} style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 12 }}>
                     {SPORTS_CONFIG[f.sport].leagues.map(l => <option key={l} value={l}>{l}</option>)}
                   </select>
-                  <select value={f.subCat} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, subCat: e.target.value } : x))} style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 10, borderRadius: 10 }}>
+                  <select value={f.subCat} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, subCat: e.target.value } : x))} style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 12 }}>
                     {SPORTS_CONFIG[f.sport].subCats.map(sc => <option key={sc} value={sc}>{sc}</option>)}
                   </select>
                 </div>
-                <input placeholder="Bet description" value={f.bet} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, bet: e.target.value } : x))} style={{ background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 10 }} />
-                <div style={{ display: "flex", gap: 8 }}>
-                  <div style={{ flex: 1 }}><label style={{ fontSize: 10, color: "#64748b" }}>ODD</label><input type="number" step="0.01" value={f.odd} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, odd: parseFloat(e.target.value) } : x))} style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 10 }} /></div>
-                  <div style={{ flex: 1 }}><label style={{ fontSize: 10, color: "#64748b" }}>STAKE €</label><input type="number" value={f.stakeE} onChange={e => { const val = parseFloat(e.target.value); setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, stakeE: val, stakeU: val / 60 } : x)); }} style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 10 }} /></div>
-                  <div style={{ flex: 1 }}><label style={{ fontSize: 10, color: "#64748b" }}>UNIT (U)</label><input type="number" step="0.1" value={f.stakeU} onChange={e => { const val = parseFloat(e.target.value); setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, stakeU: val, stakeE: val * 60 } : x)); }} style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 10 }} /></div>
+
+                <input placeholder="Nom du pari / Détails" value={f.bet} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, bet: e.target.value } : x))} style={{ background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 14, borderRadius: 12, fontSize: 15 }} />
+
+                <div style={{ display: "flex", gap: 10 }}>
+                  <div style={{ flex: 1 }}><label style={{ fontSize: 10, color: "#64748b", fontWeight: 700 }}>COTE</label><input type="number" step="0.01" value={f.odd} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, odd: parseFloat(e.target.value) } : x))} style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 12, boxSizing: "border-box" }} /></div>
+                  <div style={{ flex: 1 }}><label style={{ fontSize: 10, color: "#64748b", fontWeight: 700 }}>UNITÉ (U)</label><input type="number" step="0.1" value={f.stakeU} onChange={e => { const v = parseFloat(e.target.value); setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, stakeU: v, stakeE: v * 60 } : x)); }} style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 12, boxSizing: "border-box" }} /></div>
+                  <div style={{ flex: 1 }}><label style={{ fontSize: 10, color: "#64748b", fontWeight: 700 }}>MISE €</label><input type="number" value={f.stakeE} onChange={e => { const v = parseFloat(e.target.value); setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, stakeE: v, stakeU: v / 60 } : x)); }} style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 12, boxSizing: "border-box" }} /></div>
                 </div>
-                <div style={{ display: "flex", gap: 5 }}>
-                  {RESULTS.map(r => <button key={r} onClick={() => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, result: r } : x))} style={{ flex: 1, padding: "10px", borderRadius: 8, border: "1px solid", borderColor: f.result === r ? RESULT_COLORS[r] : "#334155", background: f.result === r ? RESULT_COLORS[r] + "22" : "#1e293b", color: f.result === r ? RESULT_COLORS[r] : "#94a3b8" }}>{r}</button>)}
+
+                <div style={{ display: "flex", gap: 6 }}>
+                  {RESULTS.map(r => <button key={r} onClick={() => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, result: r } : x))} style={{ flex: 1, padding: "10px 5px", borderRadius: 10, fontSize: 12, fontWeight: 700, border: "1px solid", borderColor: f.result === r ? RESULT_COLORS[r] : "#334155", background: f.result === r ? RESULT_COLORS[r] + "20" : "#1e293b", color: f.result === r ? RESULT_COLORS[r] : "#94a3b8" }}>{r}</button>)}
                 </div>
               </div>
             ))}
-            <button onClick={handleSave} style={{ background: "#38bdf8", color: "#0a0f1e", padding: 18, borderRadius: 14, border: "none", fontWeight: 800, fontSize: 16 }}>SAVE TO CLOUD</button>
+            <button onClick={handleSave} style={{ background: "#38bdf8", color: "#0f172a", padding: 18, borderRadius: 15, border: "none", fontWeight: 800, fontSize: 16, marginTop: 5 }}>ENREGISTRER DANS LE CLOUD</button>
           </div>
         )}
 
         {tab === "list" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {filtered.map(b => (
-              <div key={b.id} style={{ background: "#111827", padding: 14, borderRadius: 14, borderLeft: `5px solid ${RESULT_COLORS[b.result]}` }}>
+            {bets.map(b => (
+              <div key={b.id} style={{ background: "#111827", padding: 15, borderRadius: 18, borderLeft: `6px solid ${RESULT_COLORS[b.result]}`, position: "relative" }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <div>
-                    <div style={{ fontSize: 10, color: "#64748b" }}>{b.date} • {b.sport} • {b.league}</div>
-                    <div style={{ fontSize: 15, fontWeight: 700 }}>{b.bet} <span style={{ color: "#475569", fontSize: 11 }}>({b.subCat})</span></div>
-                    <div style={{ fontSize: 13, color: "#94a3b8" }}>@{b.odd} • {b.stakeE}€ ({b.stakeU}u)</div>
+                    <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>{b.date} • {b.sport}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, margin: "4px 0" }}>{b.bet} <span style={{ color: "#475569", fontSize: 12 }}>({b.subCat})</span></div>
+                    <div style={{ fontSize: 13, color: "#94a3b8" }}>@{b.odd} • {b.stakeE}€ <span style={{ fontSize: 11 }}>({b.stakeU}u)</span></div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ color: RESULT_COLORS[b.result], fontWeight: 900 }}>{b.result === "Win" ? "+" + ((b.odd - 1) * b.stakeE).toFixed(2) + "€" : b.result}</div>
-                    <div style={{ display: "flex", gap: 12, marginTop: 10 }}>
+                    <div style={{ color: RESULT_COLORS[b.result], fontWeight: 900, fontSize: 16 }}>{b.result === "Win" ? "+" + ((b.odd - 1) * b.stakeE).toFixed(2) + "€" : b.result}</div>
+                    <div style={{ display: "flex", gap: 15, marginTop: 12, justifyContent: "flex-end" }}>
                       <button onClick={() => { setBatchForms([{...b}]); setEditId(b.id); setTab("add"); }} style={{ background: "none", border: "none", color: "#475569" }}><Icons.Edit s={18} /></button>
                       <button onClick={async () => { await supabase.from('bets').delete().eq('id', b.id); setBets(bets.filter(x => x.id !== b.id)); }} style={{ background: "none", border: "none", color: "#ef4444" }}><Icons.Trash s={18} /></button>
                     </div>
@@ -173,18 +191,28 @@ export default function App() {
 
         {tab === "stats" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div style={{ background: "#111827", padding: 15, borderRadius: 14, textAlign: "center", border: "1px solid #1e293b" }}><div style={{ fontSize: 10, color: "#64748b" }}>PROFIT</div><div style={{ fontSize: 20, fontWeight: 800, color: stats.profitE >= 0 ? "#22c55e" : "#ef4444" }}>{fmt(stats.profitE)}€</div></div>
-            <div style={{ background: "#111827", padding: 15, borderRadius: 14, textAlign: "center", border: "1px solid #1e293b" }}><div style={{ fontSize: 10, color: "#64748b" }}>ROI</div><div style={{ fontSize: 20, fontWeight: 800, color: stats.roi >= 0 ? "#22c55e" : "#ef4444" }}>{fmt(stats.roi)}%</div></div>
-            <div style={{ background: "#111827", padding: 15, borderRadius: 14, textAlign: "center", border: "1px solid #1e293b" }}><div style={{ fontSize: 10, color: "#64748b" }}>BETS</div><div style={{ fontSize: 20, fontWeight: 800 }}>{stats.count}</div></div>
-            <div style={{ background: "#111827", padding: 15, borderRadius: 14, textAlign: "center", border: "1px solid #1e293b" }}><div style={{ fontSize: 10, color: "#64748b" }}>WIN RATE</div><div style={{ fontSize: 20, fontWeight: 800 }}>{stats.wr.toFixed(1)}%</div></div>
+            <div style={{ background: "#111827", padding: 20, borderRadius: 18, textAlign: "center", border: "1px solid #1e293b" }}><div style={{ fontSize: 11, color: "#64748b", marginBottom: 5 }}>PROFIT TOTAL</div><div style={{ fontSize: 22, fontWeight: 900, color: stats.profitE >= 0 ? "#22c55e" : "#ef4444" }}>{fmt(stats.profitE)}€</div></div>
+            <div style={{ background: "#111827", padding: 20, borderRadius: 18, textAlign: "center", border: "1px solid #1e293b" }}><div style={{ fontSize: 11, color: "#64748b", marginBottom: 5 }}>ROI</div><div style={{ fontSize: 22, fontWeight: 900, color: stats.roi >= 0 ? "#22c55e" : "#ef4444" }}>{fmt(stats.roi)}%</div></div>
+            <div style={{ background: "#111827", padding: 20, borderRadius: 18, textAlign: "center", border: "1px solid #1e293b" }}><div style={{ fontSize: 11, color: "#64748b", marginBottom: 5 }}>PARIS</div><div style={{ fontSize: 22, fontWeight: 900 }}>{stats.count}</div></div>
+            <div style={{ background: "#111827", padding: 20, borderRadius: 18, textAlign: "center", border: "1px solid #1e293b" }}><div style={{ fontSize: 11, color: "#64748b", marginBottom: 5 }}>WIN RATE</div><div style={{ fontSize: 22, fontWeight: 900 }}>{stats.wr.toFixed(1)}%</div></div>
           </div>
         )}
       </div>
 
-      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#0f172a", display: "flex", justifyContent: "space-around", padding: "15px 0 35px", borderTop: "1px solid #1e293b" }}>
-        <button onClick={() => setTab("add")} style={{ background: "none", border: "none", color: tab === "add" ? "#38bdf8" : "#475569" }}><Icons.Plus /><div style={{ fontSize: 10 }}>Add</div></button>
-        <button onClick={() => setTab("list")} style={{ background: "none", border: "none", color: tab === "list" ? "#38bdf8" : "#475569" }}><Icons.List /><div style={{ fontSize: 10 }}>Bets</div></button>
-        <button onClick={() => setTab("stats")} style={{ background: "none", border: "none", color: tab === "stats" ? "#38bdf8" : "#475569" }}><Icons.Chart /><div style={{ fontSize: 10 }}>Stats</div></button>
+      {/* BARRE DE NAVIGATION */}
+      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#0f172a", display: "flex", justifyContent: "space-around", padding: "15px 0 35px", borderTop: "1px solid #1e293b", zIndex: 100 }}>
+        <button onClick={() => setTab("add")} style={{ background: "none", border: "none", color: tab === "add" ? "#38bdf8" : "#475569", display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
+          <Icons.Plus />
+          <span style={{ fontSize: 11, fontWeight: 700 }}>Ajouter</span>
+        </button>
+        <button onClick={() => setTab("list")} style={{ background: "none", border: "none", color: tab === "list" ? "#38bdf8" : "#475569", display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
+          <Icons.List />
+          <span style={{ fontSize: 11, fontWeight: 700 }}>Paris</span>
+        </button>
+        <button onClick={() => setTab("stats")} style={{ background: "none", border: "none", color: tab === "stats" ? "#38bdf8" : "#475569", display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
+          <Icons.Chart />
+          <span style={{ fontSize: 11, fontWeight: 700 }}>Stats</span>
+        </button>
       </nav>
     </div>
   );
