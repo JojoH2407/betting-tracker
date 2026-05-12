@@ -276,53 +276,42 @@ const exportXLSX = (bets) => {
 // ════════════════════════════════════════════════════════════════════════════════
 export default function App() {
   const [tab, setTab] = useState("add");
-  const [statsTab, setStatsTab] = useState("sport"); // sport | league | bk
+  const [statsTab, setStatsTab] = useState("bk");
   const [bets, setBets] = useState(() => load("bets_v2", []));
   const [bankroll, setBankrollState] = useState(() => load("bankroll_v2", {}));
   const [editId, setEditId] = useState(null);
   const [filterMonth, setFilterMonth] = useState("all");
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
-  const emptyForm = {
-    date: today(), sport: "Tennis", league: "ATP", subCat: "ML",
-    bet: "", odd: "", stakeE: 60, stakeU: 1, result: "Pending", note: "",
-  };
-  const [form, setForm] = useState(emptyForm);
+  const [batchForms, setBatchForms] = useState([emptyBetForm()]);
 
   const updateBets = (next) => { setBets(next); save("bets_v2", next); };
   const updateBankroll = (next) => { setBankrollState(next); save("bankroll_v2", next); };
 
-  const setF = (k, v) => setForm((f) => {
-    const next = { ...f, [k]: v };
-    if (k === "sport") {
-      next.league = SPORTS_CONFIG[v].leagues[0] ?? "";
-      next.subCat = SPORTS_CONFIG[v].subCats[0] ?? "";
-    }
-    if (k === "league" || k === "sport") {
-      // auto-fill stakeU from bankroll
-    }
-    return next;
-  });
-
-  // auto stakeU from current month BK config
-  const currentMonthBK = bankroll[monthKey(form.date)];
+  // unit value from the date of the first form
+  const currentMonthBK = bankroll[monthKey(batchForms[0]?.date ?? today())];
   const unitValue = currentMonthBK?.unitValue ?? null;
 
-  const handleSubmit = () => {
-    if (!form.bet || !form.odd) return;
-    const stakeU = unitValue ? (Number(form.stakeE) / unitValue).toFixed(2) : form.stakeU;
-    const entry = { ...form, stakeU, id: editId ?? Date.now() };
+  const handleSaveAll = () => {
+    const valid = batchForms.filter(f => f.bet && f.odd);
+    if (!valid.length) return;
     if (editId !== null) {
-      updateBets(bets.map((b) => (b.id === editId ? entry : b)));
+      const f = valid[0];
+      const stakeU = unitValue ? (Number(f.stakeE) / unitValue).toFixed(2) : f.stakeU;
+      updateBets(bets.map((b) => (b.id === editId ? { ...f, stakeU, id: editId } : b)));
       setEditId(null);
     } else {
-      updateBets([...bets, entry]);
+      const newEntries = valid.map(f => {
+        const stakeU = unitValue ? (Number(f.stakeE) / unitValue).toFixed(2) : f.stakeU;
+        return { ...f, stakeU, id: Date.now() + Math.random() };
+      });
+      updateBets([...bets, ...newEntries]);
     }
-    setForm(emptyForm);
+    setBatchForms([emptyBetForm()]);
     setTab("list");
   };
 
-  const startEdit = (bet) => { setForm({ ...bet }); setEditId(bet.id); setTab("add"); };
+  const startEdit = (bet) => { setBatchForms([{ ...bet }]); setEditId(bet.id); setTab("add"); };
   const deleteBet = (id) => { updateBets(bets.filter((b) => b.id !== id)); setDeleteConfirm(null); };
 
   // months
@@ -395,10 +384,6 @@ export default function App() {
     e.target.value = "";
   };
 
-  const cfg = SPORTS_CONFIG[form.sport];
-  const hasLeague = cfg.leagues.length > 0;
-  const hasSubCat = cfg.subCats.length > 0;
-
   return (
     <div style={{ minHeight: "100vh", background: "#0a0f1e", color: "#e2e8f0", fontFamily: "'SF Pro Display', 'Helvetica Neue', sans-serif", maxWidth: 500, margin: "0 auto", paddingBottom: 90 }}>
 
@@ -416,11 +401,9 @@ export default function App() {
 
       <div style={{ padding: "16px 16px 0" }}>
         {tab === "add" && (
-          <AddTab form={form} setF={setF} handleSubmit={handleSubmit}
-            editId={editId} setEditId={setEditId} setForm={setForm}
-            emptyForm={emptyForm} setTab={setTab}
-            hasLeague={hasLeague} hasSubCat={hasSubCat} cfg={cfg}
-            unitValue={unitValue} />
+          <AddTab batchForms={batchForms} setBatchForms={setBatchForms}
+            handleSaveAll={handleSaveAll} editId={editId} setEditId={setEditId}
+            setTab={setTab} emptyForm={emptyBetForm()} unitValue={unitValue} />
         )}
         {tab === "list" && (
           <ListTab bets={filtered} onEdit={startEdit} onDelete={setDeleteConfirm}
@@ -473,90 +456,141 @@ export default function App() {
 // ════════════════════════════════════════════════════════════════════════════════
 // ADD TAB
 // ════════════════════════════════════════════════════════════════════════════════
-function AddTab({ form, setF, handleSubmit, editId, setEditId, setForm, emptyForm, setTab, hasLeague, hasSubCat, cfg, unitValue }) {
+
+const emptyBetForm = (base = {}) => ({
+  date: base.date ?? new Date().toISOString().slice(0, 10),
+  sport: base.sport ?? "Tennis",
+  league: base.league ?? "ATP",
+  subCat: base.subCat ?? "ML",
+  bet: "",
+  odd: "",
+  stakeE: base.stakeE ?? 60,
+  stakeU: base.stakeU ?? 1,
+  result: "Pending",
+  note: "",
+});
+
+function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
+  const cfg = SPORTS_CONFIG[form.sport] ?? { leagues: [], subCats: [] };
+  const hasLeague = cfg.leagues.length > 0;
+  const hasSubCat = cfg.subCats.length > 0;
   const computedU = unitValue ? (Number(form.stakeE) / unitValue).toFixed(2) : null;
 
+  const set = (k, v) => {
+    const next = { ...form, [k]: v };
+    if (k === "sport") {
+      next.league = SPORTS_CONFIG[v]?.leagues[0] ?? "";
+      next.subCat = SPORTS_CONFIG[v]?.subCats[0] ?? "";
+    }
+    onChange(next);
+  };
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1 }}>
-        {editId ? "✏️ Edit Bet" : "➕ New Bet"}
+    <div style={{ background: "#111827", borderRadius: 14, padding: "14px", border: "1px solid #1e293b", display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#38bdf8", textTransform: "uppercase", letterSpacing: 1 }}>Bet {index + 1}</div>
+        {canRemove && (
+          <button onClick={onRemove} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "2px 6px" }}>×</button>
+        )}
       </div>
 
-      {/* DATE */}
-      <Input label="Date" type="date" value={form.date} onChange={(e) => setF("date", e.target.value)} />
-
-      {/* SPORT */}
+      {/* Sport */}
       <div>
-        <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Sport</div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {Object.keys(SPORTS_CONFIG).map((s) => <Chip key={s} label={s} active={form.sport === s} onClick={() => setF("sport", s)} />)}
+        <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Sport</div>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+          {Object.keys(SPORTS_CONFIG).map((s) => <Chip key={s} label={s} active={form.sport === s} onClick={() => set("sport", s)} />)}
         </div>
       </div>
 
-      {/* LEAGUE */}
+      {/* League */}
       {hasLeague && (
         <div>
-          <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>League</div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {cfg.leagues.map((l) => <Chip key={l} label={l} active={form.league === l} onClick={() => setF("league", l)} />)}
+          <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>League</div>
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+            {cfg.leagues.map((l) => <Chip key={l} label={l} active={form.league === l} onClick={() => set("league", l)} />)}
           </div>
         </div>
       )}
 
-      {/* SUB-CAT */}
+      {/* SubCat */}
       {hasSubCat && (
         <div>
-          <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Type</div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {cfg.subCats.map((s) => <Chip key={s} label={s} active={form.subCat === s} onClick={() => setF("subCat", s)} />)}
+          <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Type</div>
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+            {cfg.subCats.map((s) => <Chip key={s} label={s} active={form.subCat === s} onClick={() => set("subCat", s)} />)}
           </div>
         </div>
       )}
 
-      {/* BET */}
-      <Input label="Bet Description" placeholder="e.g. Djokovic vs Alcaraz ML" value={form.bet} onChange={(e) => setF("bet", e.target.value)} />
+      {/* Bet description */}
+      <Input placeholder="e.g. Djokovic vs Alcaraz ML" value={form.bet} onChange={(e) => set("bet", e.target.value)} />
 
-      {/* ODD + STAKES */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-        <Input label="Odd" type="number" step="0.01" placeholder="2.10" value={form.odd} onChange={(e) => setF("odd", e.target.value)} />
-        <Input label="Stake €" type="number" value={form.stakeE} onChange={(e) => setF("stakeE", e.target.value)} />
+      {/* Odd + Stakes */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+        <Input label="Odd" type="number" step="0.001" placeholder="2.100" value={form.odd} onChange={(e) => set("odd", e.target.value)} />
+        <Input label="Stake €" type="number" value={form.stakeE} onChange={(e) => set("stakeE", e.target.value)} />
         <div>
-          <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Stake u</div>
-          {computedU ? (
-            <div style={{ background: "#1e293b", border: "1px solid #38bdf833", borderRadius: 10, padding: "12px 14px", fontSize: 15, color: "#38bdf8", fontWeight: 700 }}>
-              {computedU}u
-            </div>
-          ) : (
-            <input type="number" step="0.25" value={form.stakeU} onChange={(e) => setF("stakeU", e.target.value)}
-              style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: "12px 14px", color: "#f8fafc", fontSize: 15, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" }} />
-          )}
-          {unitValue && <div style={{ fontSize: 10, color: "#64748b", marginTop: 4 }}>Auto (1u = {unitValue}€)</div>}
+          <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Stake u</div>
+          {computedU
+            ? <div style={{ background: "#1e293b", border: "1px solid #38bdf833", borderRadius: 10, padding: "12px 14px", fontSize: 14, color: "#38bdf8", fontWeight: 700 }}>{computedU}u</div>
+            : <input type="number" step="0.25" value={form.stakeU} onChange={(e) => set("stakeU", e.target.value)}
+                style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: "12px 14px", color: "#f8fafc", fontSize: 14, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" }} />
+          }
         </div>
       </div>
 
-      {/* RESULT */}
+      {/* Result */}
       <div>
-        <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Result</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {RESULTS.map((r) => <Chip key={r} label={r} active={form.result === r} onClick={() => setF("result", r)} color={RESULT_COLORS[r]} />)}
+        <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Result</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {RESULTS.map((r) => <Chip key={r} label={r} active={form.result === r} onClick={() => set("result", r)} color={RESULT_COLORS[r]} />)}
         </div>
       </div>
 
-      {/* NOTE */}
-      <Input label="Note (optional)" placeholder="Analysis, context..." value={form.note} onChange={(e) => setF("note", e.target.value)} />
-
-      {/* ACTIONS */}
-      <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-        {editId && <Btn onClick={() => { setEditId(null); setForm(emptyForm); setTab("list"); }} flex={1}>Cancel</Btn>}
-        <button onClick={handleSubmit} style={{ flex: 2, background: "#38bdf8", border: "none", borderRadius: 12, padding: "16px", color: "#0a0f1e", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
-          {editId ? "Update" : "Save Bet"}
-        </button>
-      </div>
+      {/* Note */}
+      <Input label="Note (optional)" placeholder="Analysis, context..." value={form.note} onChange={(e) => set("note", e.target.value)} />
     </div>
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════════
+function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, setTab, emptyForm, unitValue }) {
+  const addForm = () => {
+    const last = batchForms[batchForms.length - 1];
+    setBatchForms([...batchForms, emptyBetForm({ date: last.date, sport: last.sport, league: last.league, subCat: last.subCat, stakeE: last.stakeE, stakeU: last.stakeU })]);
+  };
+  const updateForm = (i, val) => setBatchForms(batchForms.map((f, idx) => idx === i ? val : f));
+  const removeForm = (i) => setBatchForms(batchForms.filter((_, idx) => idx !== i));
+
+  const validCount = batchForms.filter(f => f.bet && f.odd).length;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1 }}>
+          {editId ? "✏️ Edit Bet" : `➕ New Bets (${batchForms.length})`}
+        </div>
+        {editId && <button onClick={() => { setEditId(null); setBatchForms([emptyBetForm()]); setTab("list"); }} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 13 }}>Cancel</button>}
+      </div>
+
+      {batchForms.map((f, i) => (
+        <BetForm key={i} index={i} form={f} onChange={(val) => updateForm(i, val)}
+          onRemove={() => removeForm(i)} unitValue={unitValue} canRemove={batchForms.length > 1} />
+      ))}
+
+      {!editId && (
+        <button onClick={addForm} style={{ background: "#1e293b", border: "1px dashed #334155", borderRadius: 12, padding: "12px", color: "#38bdf8", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+          + Add another bet
+        </button>
+      )}
+
+      <button onClick={handleSaveAll} style={{ background: "#38bdf8", border: "none", borderRadius: 12, padding: "16px", color: "#0a0f1e", fontSize: 16, fontWeight: 800, cursor: "pointer", position: "sticky", bottom: 90 }}>
+        {editId ? "Update" : `Save ${validCount > 1 ? validCount + " bets" : "bet"}`}
+      </button>
+    </div>
+  );
+}
+
 // LIST TAB
 // ════════════════════════════════════════════════════════════════════════════════
 function ListTab({ bets, onEdit, onDelete, onExport, onImport, onDeleteAll, filterMonth }) {
@@ -723,7 +757,7 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
 
       {/* SUB-TABS */}
       <div style={{ display: "flex", gap: 8, borderBottom: "1px solid #1e293b", paddingBottom: 12 }}>
-        {[["sport", "By Sport"], ["league", "By League"], ["bk", "Bankroll"]].map(([k, l]) => (
+        {[["bk", "Bankroll"], ["sport", "By Sport"], ["league", "By League"]].map(([k, l]) => (
           <button key={k} onClick={() => setStatsTab(k)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, color: statsTab === k ? "#38bdf8" : "#475569", borderBottom: statsTab === k ? "2px solid #38bdf8" : "2px solid transparent", paddingBottom: 4 }}>{l}</button>
         ))}
       </div>
@@ -790,7 +824,7 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
                     <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div style={{ fontSize: 12, color: "#64748b" }}>Running Balance</div>
                       <div style={{ fontSize: 14, fontWeight: 700, color: bk.end ? (running >= bk.end ? "#22c55e" : "#f59e0b") : "#e2e8f0" }}>
-                        {running.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}€
+                        {running.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
                       </div>
                     </div>
                   )}
