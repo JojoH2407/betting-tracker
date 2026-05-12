@@ -596,15 +596,112 @@ function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, s
 
 // LIST TAB
 // ════════════════════════════════════════════════════════════════════════════════
-function ListTab({ bets, onEdit, onDelete, onExport, onImport, onDeleteAll, filterMonth }) {
-  const [showDeleteAll, setShowDeleteAll] = useState(false);
-  const sorted = [...bets].sort((a, b) => b.date.localeCompare(a.date));
 
-  const groups = {};
-  sorted.forEach((b) => { if (!groups[b.date]) groups[b.date] = []; groups[b.date].push(b); });
+const getWeekNumber = (dateStr) => {
+  const d = new Date(dateStr + "T12:00:00");
+  const startOfYear = new Date(d.getFullYear(), 0, 1);
+  const diff = d - startOfYear + (startOfYear.getTimezoneOffset() - d.getTimezoneOffset()) * 60000;
+  return Math.ceil((diff / 86400000 + startOfYear.getDay() + 1) / 7);
+};
+
+const weekKey = (dateStr) => {
+  const d = new Date(dateStr + "T12:00:00");
+  return `${d.getFullYear()}-W${String(getWeekNumber(dateStr)).padStart(2, "0")}`;
+};
+
+function DayGroup({ date, bets, onEdit, onDelete, defaultOpen }) {
+  const [open, setOpen] = useState(defaultOpen ?? true);
+  const profitE = bets.reduce((a, b) => a + calcProfit(b, "E"), 0);
+  const profitU = bets.reduce((a, b) => a + calcProfit(b, "U"), 0);
+  const settled = bets.filter(b => b.result !== "Pending" && b.result !== "Void");
+  const hasSettled = settled.length > 0;
+  const d = new Date(date + "T12:00:00");
+  const dateLabel = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }).toUpperCase();
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div>
+      <button onClick={() => setOpen(o => !o)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", marginBottom: open ? 8 : 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, color: "#64748b", letterSpacing: 2, textTransform: "uppercase" }}>{dateLabel}</span>
+          <span style={{ fontSize: 11, color: "#475569" }}>({bets.length})</span>
+          <span style={{ fontSize: 12, color: "#475569" }}>{open ? "▾" : "▸"}</span>
+        </div>
+        {hasSettled && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: profitE >= 0 ? "#22c55e" : "#ef4444" }}>{fmt(profitE)}€</span>
+            <span style={{ fontSize: 11, color: profitU >= 0 ? "#22c55e99" : "#ef444499" }}>{fmt(profitU)}u</span>
+          </div>
+        )}
+      </button>
+      {open && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 4 }}>
+          {bets.map((b) => <BetCard key={b.id} bet={b} onEdit={onEdit} onDelete={onDelete} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WeekGroup({ weekLabel, days, bets, onEdit, onDelete, defaultOpen }) {
+  const [open, setOpen] = useState(defaultOpen ?? true);
+  const profitE = bets.reduce((a, b) => a + calcProfit(b, "E"), 0);
+  const profitU = bets.reduce((a, b) => a + calcProfit(b, "U"), 0);
+  const settled = bets.filter(b => b.result !== "Pending" && b.result !== "Void");
+  const hasSettled = settled.length > 0;
+
+  return (
+    <div style={{ background: "#0d1525", borderRadius: 12, border: "1px solid #1e293b", overflow: "hidden", marginBottom: 4 }}>
+      <button onClick={() => setOpen(o => !o)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#38bdf8", letterSpacing: 2, textTransform: "uppercase" }}>{weekLabel}</span>
+          <span style={{ fontSize: 11, color: "#475569" }}>· {bets.length} bets</span>
+          <span style={{ fontSize: 12, color: "#475569" }}>{open ? "▾" : "▸"}</span>
+        </div>
+        {hasSettled && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: profitE >= 0 ? "#22c55e" : "#ef4444" }}>{fmt(profitE)}€</span>
+            <span style={{ fontSize: 11, color: profitU >= 0 ? "#22c55e99" : "#ef444499" }}>{fmt(profitU)}u</span>
+          </div>
+        )}
+      </button>
+      {open && (
+        <div style={{ padding: "0 12px 12px" }}>
+          {days.map(date => (
+            <DayGroup key={date} date={date} bets={bets.filter(b => b.date === date)} onEdit={onEdit} onDelete={onDelete} defaultOpen={true} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ListTab({ bets, onEdit, onDelete, onExport, onImport, onDeleteAll, filterMonth }) {
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
+  const [sportFilter, setSportFilter] = useState("All");
+  const [showFilters, setShowFilters] = useState(false);
+
+  const sports = ["All", ...Object.keys(SPORTS_CONFIG)];
+  const filtered = sportFilter === "All" ? bets : bets.filter(b => b.sport === sportFilter);
+  const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date));
+
+  // Group by week then by day
+  const weeks = {};
+  sorted.forEach(b => {
+    const wk = weekKey(b.date);
+    if (!weeks[wk]) weeks[wk] = { dates: new Set(), bets: [] };
+    weeks[wk].dates.add(b.date);
+    weeks[wk].bets.push(b);
+  });
+
+  const weekEntries = Object.entries(weeks).sort(([a], [b]) => b.localeCompare(a));
+
+  const weekLabel = (wk) => {
+    const [year, wNum] = wk.split("-W");
+    return `Week ${parseInt(wNum)} · ${year}`;
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* toolbar */}
       <div style={{ display: "flex", gap: 8 }}>
         <label style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: "10px", color: "#94a3b8", fontSize: 13, cursor: "pointer", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
@@ -614,17 +711,32 @@ function ListTab({ bets, onEdit, onDelete, onExport, onImport, onDeleteAll, filt
         <button onClick={onExport} style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: "10px", color: "#94a3b8", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
           <Icons.Download /> Export XLSX
         </button>
+        <button onClick={() => setShowFilters(f => !f)} style={{ background: showFilters ? "#38bdf822" : "#1e293b", border: `1px solid ${showFilters ? "#38bdf8" : "#334155"}`, borderRadius: 10, padding: "10px 12px", color: showFilters ? "#38bdf8" : "#94a3b8", fontSize: 13, cursor: "pointer" }}>
+          ⚙︎
+        </button>
       </div>
+
+      {/* Filters */}
+      {showFilters && (
+        <div style={{ background: "#111827", borderRadius: 12, padding: "12px", border: "1px solid #1e293b", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 1 }}>Filter by sport</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {sports.map(s => <Chip key={s} label={s} active={sportFilter === s} onClick={() => setSportFilter(s)} />)}
+          </div>
+        </div>
+      )}
+
+      {/* Delete all */}
       {showDeleteAll ? (
         <div style={{ background: "#1e293b", border: "1px solid #ef4444", borderRadius: 12, padding: "14px", display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "#f8fafc" }}>Delete all bets? This cannot be undone.</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#f8fafc" }}>Delete {filterMonth === "all" ? "all" : "this month's"} bets?</div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => setShowDeleteAll(false)} style={{ flex: 1, background: "#334155", border: "none", borderRadius: 10, padding: "10px", color: "#f8fafc", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
-            <button onClick={() => { onDeleteAll(); setShowDeleteAll(false); }} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 10, padding: "10px", color: "#fff", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>Yes, delete all</button>
+            <button onClick={() => { onDeleteAll(); setShowDeleteAll(false); }} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 10, padding: "10px", color: "#fff", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>Yes, delete</button>
           </div>
         </div>
       ) : (
-        <button onClick={() => setShowDeleteAll(true)} style={{ background: "none", border: "1px solid #ef444433", borderRadius: 10, padding: "10px", color: "#ef4444", fontSize: 13, cursor: "pointer", width: "100%" }}>
+        <button onClick={() => setShowDeleteAll(true)} style={{ background: "none", border: "1px solid #ef444433", borderRadius: 10, padding: "8px", color: "#ef4444", fontSize: 12, cursor: "pointer", width: "100%" }}>
           🗑 Delete {filterMonth === "all" ? "all" : "this month's"} bets
         </button>
       )}
@@ -636,16 +748,13 @@ function ListTab({ bets, onEdit, onDelete, onExport, onImport, onDeleteAll, filt
         </div>
       )}
 
-      {Object.entries(groups).map(([date, dayBets]) => (
-        <div key={date}>
-          <div style={{ fontSize: 11, color: "#64748b", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>
-            {new Date(date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {dayBets.map((b) => <BetCard key={b.id} bet={b} onEdit={onEdit} onDelete={onDelete} />)}
-          </div>
-        </div>
-      ))}
+      {/* Weeks */}
+      {weekEntries.map(([wk, { bets: wBets, dates }]) => {
+        const sortedDates = [...dates].sort((a, b) => b.localeCompare(a));
+        return (
+          <WeekGroup key={wk} weekLabel={weekLabel(wk)} days={sortedDates} bets={wBets} onEdit={onEdit} onDelete={onDelete} defaultOpen={true} />
+        );
+      })}
     </div>
   );
 }
@@ -664,14 +773,14 @@ function BetCard({ bet, onEdit, onDelete }) {
           </div>
           <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.3, marginBottom: 5 }}>{bet.bet}</div>
           <div style={{ fontSize: 12, color: "#64748b", display: "flex", gap: 12 }}>
-            <span>@{Number(bet.odd).toFixed(2)}</span>
+            <span>@{Number(bet.odd).toFixed(3)}</span>
             <span>{bet.stakeE}€ / {Number(bet.stakeU).toFixed(2)}u</span>
           </div>
           {bet.note && <div style={{ fontSize: 12, color: "#64748b", marginTop: 4, fontStyle: "italic" }}>{bet.note}</div>}
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
           {bet.result !== "Pending" && bet.result !== "Void" && (
-            <div style={{ fontSize: 16, fontWeight: 700, color: profitE >= 0 ? "#22c55e" : "#ef4444" }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: profitE >= 0 ? "#22c55e" : "#ef4444" }}>
               {fmt(profitE)}€
             </div>
           )}
