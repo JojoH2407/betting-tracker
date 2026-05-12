@@ -42,8 +42,11 @@ const today = () => new Date().toISOString().slice(0, 10);
 const monthKey = (d) => d?.slice(0, 7) ?? "";
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const monthLabel = (k) => {
+  if (!k || !k.includes("-")) return k ?? "";
   const [y, m] = k.split("-");
-  return `${MONTH_NAMES[parseInt(m, 10) - 1]} ${y}`;
+  const idx = parseInt(m, 10) - 1;
+  if (idx < 0 || idx > 11) return k;
+  return `${MONTH_NAMES[idx]} ${y}`;
 };
 
 // ── STORAGE ───────────────────────────────────────────────────────────────────
@@ -180,36 +183,64 @@ const Btn = ({ children, onClick, bg, color, flex }) => (
 );
 
 // ── CSV IMPORT ────────────────────────────────────────────────────────────────
+const parseCSVLine = (line) => {
+  const result = [];
+  let cur = "", inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQuote = !inQuote; }
+    else if (ch === "," && !inQuote) { result.push(cur.trim()); cur = ""; }
+    else { cur += ch; }
+  }
+  result.push(cur.trim());
+  return result;
+};
+
+const parseDate = (raw) => {
+  if (!raw) return today();
+  // dd/mm/yyyy → yyyy-mm-dd
+  const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;
+  // already yyyy-mm-dd
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  return today();
+};
+
 const parseCSV = (text) => {
-  const lines = text.trim().split("\n");
-  const headers = lines[0].split(",").map((h) => h.trim().replace(/"/g, "").toLowerCase());
+  const lines = text.trim().split(/\r?\n/);
+  const headers = parseCSVLine(lines[0]).map((h) => h.replace(/"/g, "").toLowerCase().trim());
+
+  const resultMap = { win: "Win", lose: "Lose", void: "Void", "": "", pending: "Pending" };
+  const sportMap = { tennis: "Tennis", baseball: "Baseball", mlb: "Baseball", football: "Football", basketball: "Basketball", nba: "Basketball", esport: "eSport", "e-sport": "eSport", f1: "F1", cycling: "Cycling" };
+
   return lines.slice(1).map((line) => {
-    const vals = line.split(",").map((v) => v.trim().replace(/"/g, ""));
+    if (!line.trim()) return null;
+    const vals = parseCSVLine(line);
     const row = {};
-    headers.forEach((h, i) => { row[h] = vals[i] ?? ""; });
+    headers.forEach((h, i) => { row[h] = (vals[i] ?? "").replace(/^"|"$/g, "").trim(); });
 
-    const resultMap = { win: "Win", lose: "Lose", void: "Void", "": "Pending", pending: "Pending" };
-    const rawResult = (row.result ?? "").toLowerCase();
-
-    // map sport
-    const sportMap = { tennis: "Tennis", baseball: "Baseball", mlb: "Baseball", football: "Football", basketball: "Basketball", nba: "Basketball", esport: "eSport", "e-sport": "eSport", f1: "F1", cycling: "Cycling" };
     const rawSport = (row.sport ?? "").toLowerCase();
     const sport = sportMap[rawSport] ?? row.sport ?? "Tennis";
+    const rawResult = (row.result ?? "").toLowerCase();
+    const result = resultMap[rawResult] ?? (row.result || "");
+
+    // Parse odd — replace comma decimal separator
+    const parseNum = (v) => v ? parseFloat(v.replace(",", ".")) : 0;
 
     return {
       id: Date.now() + Math.random(),
-      date: row.date ?? today(),
+      date: parseDate(row.date),
       sport,
-      league: row.category ?? row.league ?? "",
-      subCat: row.subcategory ?? row.subcat ?? "",
+      league: row.league ?? row.category ?? "",
+      subCat: row.subcat ?? row.subcategory ?? row.type ?? "",
       bet: row.bet ?? "",
-      odd: parseFloat(row.odd ?? row.odds ?? 1),
-      stakeE: parseFloat(row["stake(€)"] ?? row.stakee ?? row.stake ?? 60),
-      stakeU: parseFloat(row["stake(u)"] ?? row.stakeu ?? 1),
-      result: resultMap[rawResult] ?? "Pending",
+      odd: parseNum(row.odd ?? row.odds) || 1,
+      stakeE: parseNum(row["stake(€)"] ?? row.stakee ?? row["stake(e)"] ?? row.stake) || 0,
+      stakeU: parseNum(row["stake(u)"] ?? row.stakeu) || 0,
+      result: result || "",
       note: row.note ?? "",
     };
-  }).filter((b) => b.bet);
+  }).filter((b) => b && b.bet);
 };
 
 // ── EXPORT XLSX (via SheetJS CDN) ─────────────────────────────────────────────
@@ -321,15 +352,22 @@ export default function App() {
   const byLeague = useMemo(() => groupStats(filtered, "league"), [filtered]);
 
   const total = useMemo(() => {
-    let wins = 0, settled = 0, profitE = 0, profitU = 0, totalInvE = 0, oddsSum = 0, oddsCount = 0;
+    let wins = 0, settled = 0, profitE = 0, profitU = 0, totalInvE = 0, totalInvU = 0, oddsSum = 0, oddsCount = 0;
     filtered.forEach((b) => {
       if (b.result !== "Void" && b.result !== "Pending") settled++;
       if (b.result === "Win") { wins++; profitE += calcProfit(b, "E"); profitU += calcProfit(b, "U"); }
       else if (b.result === "Lose") { profitE += calcProfit(b, "E"); profitU += calcProfit(b, "U"); }
-      if (b.result !== "Void" && b.result !== "Pending") totalInvE += Number(b.stakeE);
+      if (b.result !== "Void" && b.result !== "Pending") { totalInvE += Number(b.stakeE); totalInvU += Number(b.stakeU); }
       if (b.odd) { oddsSum += Number(b.odd); oddsCount++; }
     });
-    return { total: filtered.length, wins, settled, winRate: settled ? (wins / settled) * 100 : 0, profitE, profitU, totalInvE, roi: totalInvE ? (profitE / totalInvE) * 100 : 0, avgOdd: oddsCount ? oddsSum / oddsCount : 0 };
+    return {
+      total: filtered.length, wins, settled,
+      winRate: settled ? (wins / settled) * 100 : 0,
+      profitE, profitU, totalInvE, totalInvU,
+      roi: totalInvE ? (profitE / totalInvE) * 100 : 0,
+      avgOdd: oddsCount ? oddsSum / oddsCount : 0,
+      avgStakeU: settled ? totalInvU / settled : 0,
+    };
   }, [filtered]);
 
   const bkChartData = useMemo(() =>
@@ -386,13 +424,19 @@ export default function App() {
         )}
         {tab === "list" && (
           <ListTab bets={filtered} onEdit={startEdit} onDelete={setDeleteConfirm}
-            onExport={() => exportXLSX(bets)} onImport={handleCSVImport} />
+            onExport={() => exportXLSX(bets)} onImport={handleCSVImport}
+            filterMonth={filterMonth}
+            onDeleteAll={() => {
+              if (filterMonth === "all") updateBets([]);
+              else updateBets(bets.filter((b) => monthKey(b.date) !== filterMonth));
+            }} />
         )}
         {tab === "stats" && (
           <StatsTab total={total} bySport={bySport} byLeague={byLeague}
             maxProfitAbs={maxProfitAbs} bkChartData={bkChartData}
             bankroll={bankroll} updateBankroll={updateBankroll}
-            allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab} />
+            allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab}
+            bets={bets} />
         )}
       </div>
 
@@ -515,7 +559,8 @@ function AddTab({ form, setF, handleSubmit, editId, setEditId, setForm, emptyFor
 // ════════════════════════════════════════════════════════════════════════════════
 // LIST TAB
 // ════════════════════════════════════════════════════════════════════════════════
-function ListTab({ bets, onEdit, onDelete, onExport, onImport }) {
+function ListTab({ bets, onEdit, onDelete, onExport, onImport, onDeleteAll, filterMonth }) {
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
   const sorted = [...bets].sort((a, b) => b.date.localeCompare(a.date));
 
   const groups = {};
@@ -533,6 +578,19 @@ function ListTab({ bets, onEdit, onDelete, onExport, onImport }) {
           <Icons.Download /> Export XLSX
         </button>
       </div>
+      {showDeleteAll ? (
+        <div style={{ background: "#1e293b", border: "1px solid #ef4444", borderRadius: 12, padding: "14px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#f8fafc" }}>Delete all bets? This cannot be undone.</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setShowDeleteAll(false)} style={{ flex: 1, background: "#334155", border: "none", borderRadius: 10, padding: "10px", color: "#f8fafc", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+            <button onClick={() => { onDeleteAll(); setShowDeleteAll(false); }} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 10, padding: "10px", color: "#fff", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>Yes, delete all</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setShowDeleteAll(true)} style={{ background: "none", border: "1px solid #ef444433", borderRadius: 10, padding: "10px", color: "#ef4444", fontSize: 13, cursor: "pointer", width: "100%" }}>
+          🗑 Delete {filterMonth === "all" ? "all" : "this month's"} bets
+        </button>
+      )}
 
       {sorted.length === 0 && (
         <div style={{ textAlign: "center", color: "#475569", padding: "60px 20px" }}>
@@ -593,7 +651,7 @@ function BetCard({ bet, onEdit, onDelete }) {
 // ════════════════════════════════════════════════════════════════════════════════
 // STATS TAB
 // ════════════════════════════════════════════════════════════════════════════════
-function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankroll, updateBankroll, allMonths, statsTab, setStatsTab }) {
+function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankroll, updateBankroll, allMonths, statsTab, setStatsTab, bets }) {
   const [bkEdit, setBkEdit] = useState(null);
   const [bkForm, setBkForm] = useState({ start: "", end: "", unitValue: "", fees: "" });
 
@@ -607,10 +665,19 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
     setBkEdit(null);
   };
 
+  // Running balance per month = start BK + profit from bets
+  const runningBalance = (mk) => {
+    const bk = bankroll[mk] ?? {};
+    if (!bk.start) return null;
+    const profit = bets.filter((b) => monthKey(b.date) === mk).reduce((acc, b) => acc + calcProfit(b, "E"), 0);
+    return bk.start + profit;
+  };
+
   const renderGroup = (map, maxAbs) => Object.entries(map).map(([name, s]) => {
     const settled = s.bets.filter((b) => b.result !== "Void" && b.result !== "Pending").length;
     const wr = settled ? (s.wins / settled) * 100 : 0;
     const avgOdd = s.oddsCount ? s.oddsSum / s.oddsCount : 0;
+    const avgStakeU = settled ? s.bets.filter(b => b.result !== "Void" && b.result !== "Pending").reduce((a, b) => a + Number(b.stakeU), 0) / settled : 0;
     return (
       <div key={name} style={{ background: "#111827", borderRadius: 12, padding: "12px 14px", border: "1px solid #1e293b" }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
@@ -620,13 +687,14 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
         <div style={{ height: 5, background: "#1e293b", borderRadius: 3, marginBottom: 8, overflow: "hidden" }}>
           <div style={{ width: `${Math.abs(s.profitE / maxAbs) * 100}%`, height: "100%", background: s.profitE >= 0 ? "#22c55e" : "#ef4444", borderRadius: 3 }} />
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, fontSize: 11, color: "#64748b" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, fontSize: 11, color: "#64748b" }}>
           <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{s.bets.length}</div>Bets</div>
           <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{s.wins}</div>Wins</div>
-          <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{fmtAbs(wr)}%</div>Win Rate</div>
+          <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{fmtAbs(wr)}%</div>Win %</div>
           <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{fmtAbs(s.totalInvE)}€</div>Invested</div>
           <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{fmt(s.profitU)}u</div>Profit u</div>
           <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{fmtAbs(avgOdd)}</div>Avg Odd</div>
+          <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{fmtAbs(avgStakeU)}u</div>Avg Stake</div>
           <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{s.totalInvE ? fmt(s.profitE / s.totalInvE * 100) : "–"}%</div>ROI</div>
         </div>
       </div>
@@ -635,6 +703,7 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
       {/* GLOBAL KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
         <KPI label="Bets" value={total.total} />
@@ -647,7 +716,10 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
         <KPI label="Profit u" value={fmt(total.profitU) + "u"} color={total.profitU >= 0 ? "#22c55e" : "#ef4444"} large />
         <KPI label="ROI" value={fmt(total.roi) + "%"} color={total.roi >= 0 ? "#22c55e" : "#ef4444"} large />
       </div>
-      <StatRow label="Total Invested" value={fmtAbs(total.totalInvE) + "€"} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <KPI label="Total Invested" value={fmtAbs(total.totalInvE) + "€"} />
+        <KPI label="Avg Stake" value={fmtAbs(total.avgStakeU) + "u"} />
+      </div>
 
       {/* SUB-TABS */}
       <div style={{ display: "flex", gap: 8, borderBottom: "1px solid #1e293b", paddingBottom: 12 }}>
@@ -689,10 +761,19 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
             )}
           </div>
 
+          {/* ADD MONTH BK BUTTON */}
+          <button onClick={() => {
+            const mk = monthKey(today());
+            openBkEdit(mk);
+          }} style={{ background: "#1e293b", border: "1px dashed #334155", borderRadius: 12, padding: "12px", color: "#38bdf8", fontSize: 14, cursor: "pointer", fontWeight: 600 }}>
+            + Setup current month bankroll
+          </button>
+
           {/* MONTHLY BK */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {allMonths.map((mk) => {
               const bk = bankroll[mk] ?? {};
+              const running = runningBalance(mk);
               return (
                 <div key={mk} style={{ background: "#111827", borderRadius: 12, padding: "12px 14px", border: "1px solid #1e293b" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -705,10 +786,36 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
                     <div style={{ color: "#64748b" }}>1u = <b style={{ color: "#38bdf8" }}>{bk.unitValue ? bk.unitValue + "€" : "–"}</b></div>
                     <div style={{ color: "#64748b" }}>Fees: <b style={{ color: "#ef4444" }}>{bk.fees ? "-" + bk.fees + "€" : "–"}</b></div>
                   </div>
+                  {running !== null && (
+                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ fontSize: 12, color: "#64748b" }}>Running Balance</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: bk.end ? (running >= bk.end ? "#22c55e" : "#f59e0b") : "#e2e8f0" }}>
+                        {running.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}€
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
-            {allMonths.length === 0 && <div style={{ color: "#475569", textAlign: "center", padding: 20 }}>No months yet</div>}
+            {/* Also show months with BK config but no bets yet */}
+            {Object.keys(bankroll).filter(mk => !allMonths.includes(mk)).map(mk => {
+              const bk = bankroll[mk] ?? {};
+              return (
+                <div key={mk} style={{ background: "#111827", borderRadius: 12, padding: "12px 14px", border: "1px solid #1e293b" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ fontWeight: 700 }}>{monthLabel(mk)}</div>
+                    <button onClick={() => openBkEdit(mk)} style={{ background: "#1e293b", border: "none", borderRadius: 8, padding: "4px 12px", color: "#38bdf8", fontSize: 12, cursor: "pointer" }}>Edit</button>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontSize: 12 }}>
+                    <div style={{ color: "#64748b" }}>Start: <b style={{ color: "#e2e8f0" }}>{bk.start ? bk.start.toLocaleString() + "€" : "–"}</b></div>
+                    <div style={{ color: "#64748b" }}>1u = <b style={{ color: "#38bdf8" }}>{bk.unitValue ? bk.unitValue + "€" : "–"}</b></div>
+                  </div>
+                </div>
+              );
+            })}
+            {allMonths.length === 0 && Object.keys(bankroll).length === 0 && (
+              <div style={{ color: "#475569", textAlign: "center", padding: 20 }}>No months yet — click "Setup current month" above</div>
+            )}
           </div>
         </>
       )}
