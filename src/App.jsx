@@ -79,7 +79,9 @@ const Icons = {
 
 // ── PROFIT CALC ───────────────────────────────────────────────────────────────
 const calcProfit = (bet, field = "E") => {
-  const stake = field === "E" ? Number(bet.stakeE) : Number(bet.stakeU);
+  const stake = field === "E"
+    ? Number(bet.stakeE ?? bet.stakee ?? 0)
+    : Number(bet.stakeU ?? bet.stakeu ?? 0);
   if (bet.result === "Win") return (Number(bet.odd) - 1) * stake;
   if (bet.result === "Lose") return -stake;
   return 0;
