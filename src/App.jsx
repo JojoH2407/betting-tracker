@@ -905,7 +905,8 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
     const bk = bankroll[mk] ?? {};
     if (!bk.start) return null;
     const profit = bets.filter((b) => monthKey(b.date) === mk).reduce((acc, b) => acc + calcProfit(b, "E"), 0);
-    return bk.start + profit;
+    const fees = Number(bk.fees ?? 0);
+    return bk.start + profit - fees;
   };
 
   const renderGroup = (map, maxAbs) => Object.entries(map).map(([name, s]) => {
