@@ -967,7 +967,15 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
     setBkForm({ start: bk.start ?? "", end: bk.end ?? "", unitValue: bk.unitValue ?? "", fees: bk.fees ?? "" });
   };
   const saveBk = () => {
-    updateBankroll({ ...bankroll, [bkEdit]: { start: Number(bkForm.start), end: Number(bkForm.end), unitValue: Number(bkForm.unitValue), fees: Number(bkForm.fees) } });
+    const entry = { start: Number(bkForm.start), end: Number(bkForm.end), unitValue: Number(bkForm.unitValue), fees: Number(bkForm.fees) };
+    const isEmpty = [bkForm.start, bkForm.end, bkForm.unitValue, bkForm.fees].every(v => v === "" || v === "0" || Number(v) === 0);
+    if (isEmpty) {
+      const next = { ...bankroll };
+      delete next[bkEdit];
+      updateBankroll(next);
+    } else {
+      updateBankroll({ ...bankroll, [bkEdit]: entry });
+    }
     setBkEdit(null);
   };
 
@@ -1146,8 +1154,8 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
                 </div>
               );
             })}
-            {/* Also show months with BK config but no bets yet */}
-            {Object.keys(bankroll).filter(mk => !allMonths.includes(mk)).map(mk => {
+            {/* Show months with BK config but no bets — only if they have actual data */}
+            {Object.keys(bankroll).filter(mk => !allMonths.includes(mk) && (bankroll[mk]?.start || bankroll[mk]?.unitValue)).map(mk => {
               const bk = bankroll[mk] ?? {};
               return (
                 <div key={mk} style={{ background: "#111827", borderRadius: 12, padding: "12px 14px", border: "1px solid #1e293b" }}>
@@ -1240,6 +1248,12 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
               </div>
             ))}
             <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+              <Btn onClick={() => {
+                const next = { ...bankroll };
+                delete next[bkEdit];
+                updateBankroll(next);
+                setBkEdit(null);
+              }} bg="#ef444422" color="#ef4444" flex={1}>Delete</Btn>
               <Btn onClick={() => setBkEdit(null)} flex={1}>Cancel</Btn>
               <Btn onClick={saveBk} bg="#38bdf8" color="#0a0f1e" flex={1}>Save</Btn>
             </div>
