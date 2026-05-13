@@ -17,8 +17,8 @@ const SPORTS_CONFIG = {
     subCats: ["ML", "AH", "O/U", "HR", "Total Bases", "Parlay"],
   },
   Football: {
-    leagues: ["Ligue 1", "BPL", "Liga", "Serie A", "Bundesliga", "LDC", "CDM", "Exotique"],
-    subCats: ["ML", "AH", "O/U", "Parlay"],
+    leagues: ["Ligue 1", "BPL", "Liga", "Serie A", "Bundesliga", "LDC", "CDM", "National Cup", "Exotique"],
+    subCats: ["ML", "AH", "O/U", "BTTS", "Parlay"],
   },
   Basketball: {
     leagues: ["NBA", "EuroLeague", "Autre"],
