@@ -88,35 +88,47 @@ const calcProfit = (bet, field = "E") => {
 };
 
 // ── SPARKLINE ─────────────────────────────────────────────────────────────────
-const Sparkline = ({ data }) => {
+const LineChart = ({ data, valueKey = "bk", colorKey = "profit", emptyMsg, color = "#38bdf8", showDots = true, H = 90 }) => {
   if (!data || data.length < 2) return (
     <div style={{ textAlign: "center", color: "#475569", padding: "20px 0", fontSize: 13 }}>
-      Fill in monthly bankroll end values to see the chart
+      {emptyMsg ?? "Not enough data"}
     </div>
   );
-  const vals = data.map((d) => d.bk);
+  const vals = data.map((d) => d[valueKey]);
   const min = Math.min(...vals), max = Math.max(...vals);
   const range = max - min || 1;
-  const W = 340, H = 80, pad = 12;
+  const W = 340, pad = 12;
   const pts = data.map((d, i) => {
     const x = pad + (i / (data.length - 1)) * (W - pad * 2);
-    const y = pad + (H - pad * 2) - ((d.bk - min) / range) * (H - pad * 2);
+    const y = pad + (H - pad * 2) - ((d[valueKey] - min) / range) * (H - pad * 2);
     return [x, y];
   });
   const polyline = pts.map((p) => p.join(",")).join(" ");
   const [lx, ly] = pts[pts.length - 1];
+  // area fill path
+  const areaPath = `M${pts[0][0]},${H - pad} ` + pts.map(([x,y]) => `L${x},${y}`).join(" ") + ` L${pts[pts.length-1][0]},${H - pad} Z`;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
-      <polyline points={polyline} fill="none" stroke="#38bdf8" strokeWidth="2.5"
+      <defs>
+        <linearGradient id="area-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.15" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill="url(#area-grad)" />
+      <polyline points={polyline} fill="none" stroke={color} strokeWidth="2.5"
         strokeLinejoin="round" strokeLinecap="round" />
-      {pts.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={3.5}
-          fill={data[i].profit >= 0 ? "#22c55e" : "#ef4444"} />
+      {showDots && pts.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={3}
+          fill={colorKey && data[i][colorKey] !== undefined ? (data[i][colorKey] >= 0 ? "#22c55e" : "#ef4444") : color} />
       ))}
-      <circle cx={lx} cy={ly} r={5} fill="#38bdf8" opacity={0.9} />
+      <circle cx={lx} cy={ly} r={5} fill={color} opacity={0.9} />
     </svg>
   );
 };
+
+// Keep Sparkline as alias
+const Sparkline = ({ data }) => <LineChart data={data} valueKey="bk" colorKey="profit" emptyMsg="Fill in monthly bankroll end values to see the chart" />;
 
 // ── STAT ROW ──────────────────────────────────────────────────────────────────
 function StatRow({ label, value, color, sub }) {
@@ -424,6 +436,47 @@ export default function App() {
 
   const maxProfitAbs = Math.max(...Object.values(bySport).map((s) => Math.abs(s.profitE)), 1);
 
+  // Daily profit chart (cumulative within filtered period)
+  const dailyChartData = useMemo(() => {
+    const byDay = {};
+    filtered.forEach(b => {
+      if (!byDay[b.date]) byDay[b.date] = 0;
+      byDay[b.date] += calcProfit(b, "E");
+    });
+    const days = Object.keys(byDay).sort();
+    let cumul = 0;
+    return days.map(date => {
+      cumul += byDay[date];
+      return { label: date.slice(5), value: cumul, profit: byDay[date] };
+    });
+  }, [filtered]);
+
+  // Odds range performance
+  const oddsRanges = useMemo(() => {
+    const ranges = [
+      { label: "1.0-1.5", min: 1.0, max: 1.5 },
+      { label: "1.5-2.0", min: 1.5, max: 2.0 },
+      { label: "2.0-3.0", min: 2.0, max: 3.0 },
+      { label: "3.0-5.0", min: 3.0, max: 5.0 },
+      { label: "5.0+",    min: 5.0, max: Infinity },
+    ];
+    return ranges.map(r => {
+      const rb = filtered.filter(b => Number(b.odd) >= r.min && Number(b.odd) < r.max);
+      const settled = rb.filter(b => b.result !== "Void" && b.result !== "Pending");
+      const wins = rb.filter(b => b.result === "Win").length;
+      const profitE = rb.reduce((a, b) => a + calcProfit(b, "E"), 0);
+      const invested = settled.reduce((a, b) => a + Number(b.stakeE ?? b.stakee ?? 0), 0);
+      return {
+        label: r.label,
+        bets: rb.length,
+        wins,
+        wr: settled.length ? (wins / settled.length) * 100 : 0,
+        profitE,
+        roi: invested ? (profitE / invested) * 100 : 0,
+      };
+    }).filter(r => r.bets > 0);
+  }, [filtered]);
+
   // CSV import → Supabase
   const handleCSVImport = (e) => {
     const file = e.target.files[0];
@@ -496,7 +549,8 @@ export default function App() {
             maxProfitAbs={maxProfitAbs} bkChartData={bkChartData}
             bankroll={bankroll} updateBankroll={updateBankroll}
             allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab}
-            bets={bets} />
+            bets={bets} dailyChartData={dailyChartData} oddsRanges={oddsRanges}
+            filterMonth={filterMonth} />
         )}
       </div>
 
@@ -768,9 +822,12 @@ function ListTab({ bets, onEdit, onDelete, onExport, onImport, onDeleteAll, filt
   const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [sportFilter, setSportFilter] = useState("All");
   const [showFilters, setShowFilters] = useState(false);
+  const [search, setSearch] = useState("");
 
   const sports = ["All", ...Object.keys(SPORTS_CONFIG)];
-  const filtered = sportFilter === "All" ? bets : bets.filter(b => b.sport === sportFilter);
+  const filtered = bets
+    .filter(b => sportFilter === "All" || b.sport === sportFilter)
+    .filter(b => !search || b.bet?.toLowerCase().includes(search.toLowerCase()) || b.league?.toLowerCase().includes(search.toLowerCase()));
   const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date));
 
   // Group by week then by day
@@ -803,6 +860,19 @@ function ListTab({ bets, onEdit, onDelete, onExport, onImport, onDeleteAll, filt
         <button onClick={() => setShowFilters(f => !f)} style={{ background: showFilters ? "#38bdf822" : "#1e293b", border: `1px solid ${showFilters ? "#38bdf8" : "#334155"}`, borderRadius: 10, padding: "10px 12px", color: showFilters ? "#38bdf8" : "#94a3b8", fontSize: 13, cursor: "pointer" }}>
           ⚙︎
         </button>
+      </div>
+
+      {/* Search bar */}
+      <div style={{ position: "relative" }}>
+        <input
+          placeholder="🔍  Search bets..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ width: "100%", background: "#111827", border: "1px solid #1e293b", borderRadius: 10, padding: "10px 14px", color: "#f8fafc", fontSize: 14, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" }}
+        />
+        {search && (
+          <button onClick={() => setSearch("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 16 }}>×</button>
+        )}
       </div>
 
       {/* Filters */}
@@ -886,8 +956,9 @@ function BetCard({ bet, onEdit, onDelete }) {
 // ════════════════════════════════════════════════════════════════════════════════
 // STATS TAB
 // ════════════════════════════════════════════════════════════════════════════════
-function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankroll, updateBankroll, allMonths, statsTab, setStatsTab, bets }) {
+function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankroll, updateBankroll, allMonths, statsTab, setStatsTab, bets, dailyChartData, oddsRanges, filterMonth }) {
   const [bkEdit, setBkEdit] = useState(null);
+  const [showShare, setShowShare] = useState(false);
   const [bkForm, setBkForm] = useState({ start: "", end: "", unitValue: "", fees: "" });
 
   const openBkEdit = (mk) => {
@@ -957,6 +1028,11 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
         <KPI label="Avg Stake" value={fmtAbs(total.avgStakeU) + "u"} />
       </div>
 
+      {/* SHARE CARD */}
+      <button onClick={() => setShowShare(true)} style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 12, padding: "10px 14px", color: "#94a3b8", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%" }}>
+        📊 Share Monthly Summary
+      </button>
+
       {/* SUB-TABS */}
       <div style={{ display: "flex", gap: 8, borderBottom: "1px solid #1e293b", paddingBottom: 12 }}>
         {[["bk", "Bankroll"], ["sport", "By Sport"], ["league", "By League"]].map(([k, l]) => (
@@ -968,6 +1044,28 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {renderGroup(bySport, maxProfitAbs)}
           {Object.keys(bySport).length === 0 && <div style={{ color: "#475569", textAlign: "center", padding: 20 }}>No data</div>}
+        </div>
+      )}
+
+      {statsTab === "sport" && oddsRanges.length > 0 && (
+        <div style={{ background: "#111827", borderRadius: 12, padding: "12px 14px", border: "1px solid #1e293b" }}>
+          <div style={{ fontSize: 12, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Performance by Odds Range</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {oddsRanges.map(r => (
+              <div key={r.label} style={{ display: "grid", gridTemplateColumns: "60px 1fr 60px 60px 60px", gap: 6, alignItems: "center", fontSize: 12 }}>
+                <div style={{ color: "#38bdf8", fontWeight: 700 }}>{r.label}</div>
+                <div style={{ height: 5, background: "#1e293b", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ width: `${Math.min(Math.abs(r.roi), 100)}%`, height: "100%", background: r.profitE >= 0 ? "#22c55e" : "#ef4444", borderRadius: 3 }} />
+                </div>
+                <div style={{ color: "#94a3b8", textAlign: "right" }}>{r.bets}b</div>
+                <div style={{ color: "#94a3b8", textAlign: "right" }}>{r.wr.toFixed(0)}%</div>
+                <div style={{ color: r.roi >= 0 ? "#22c55e" : "#ef4444", fontWeight: 700, textAlign: "right" }}>{r.roi >= 0 ? "+" : ""}{r.roi.toFixed(1)}%</div>
+              </div>
+            ))}
+            <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 60px 60px 60px", gap: 6, fontSize: 10, color: "#475569", marginTop: 2 }}>
+              <div></div><div></div><div style={{ textAlign: "right" }}>Bets</div><div style={{ textAlign: "right" }}>WR</div><div style={{ textAlign: "right" }}>ROI</div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -993,6 +1091,21 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
                     <div style={{ fontSize: 10, color: d.profit >= 0 ? "#22c55e" : "#ef4444" }}>{fmt(d.profit)}€</div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* DAILY PROFIT CHART */}
+          <div style={{ background: "#111827", borderRadius: 12, padding: 14, border: "1px solid #1e293b" }}>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>
+              Daily Profit Evolution {filterMonth !== "all" ? "" : "(All Time)"}
+            </div>
+            <LineChart data={dailyChartData} valueKey="value" colorKey="profit"
+              emptyMsg="No settled bets yet" color="#a78bfa" H={90} />
+            {dailyChartData.length > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 12 }}>
+                <span style={{ color: "#64748b" }}>Start: <b style={{ color: "#e2e8f0" }}>0€</b></span>
+                <span style={{ color: "#64748b" }}>Now: <b style={{ color: dailyChartData[dailyChartData.length-1]?.value >= 0 ? "#22c55e" : "#ef4444" }}>{dailyChartData[dailyChartData.length-1]?.value >= 0 ? "+" : ""}{dailyChartData[dailyChartData.length-1]?.value?.toFixed(2)}€</b></span>
               </div>
             )}
           </div>
@@ -1054,6 +1167,66 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
             )}
           </div>
         </>
+      )}
+
+      {/* SHARE MODAL */}
+      {showShare && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}>
+          <div style={{ width: "100%", maxWidth: 360 }}>
+            {/* Share card — screenshot this */}
+            <div id="share-card" style={{ background: "linear-gradient(135deg, #0f172a 0%, #1a2744 100%)", borderRadius: 20, padding: 24, border: "1px solid #334155" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontSize: 10, letterSpacing: 3, color: "#38bdf8", textTransform: "uppercase" }}>JojoH Betting Tracker</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: "#f8fafc", marginTop: 4 }}>
+                    {filterMonth !== "all" ? monthLabel(filterMonth) : "All Time"}
+                  </div>
+                </div>
+                <div style={{ fontSize: 28 }}>🎯</div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+                {[
+                  { label: "Profit", value: (total.profitE >= 0 ? "+" : "") + total.profitE.toFixed(2) + "€", color: total.profitE >= 0 ? "#22c55e" : "#ef4444" },
+                  { label: "Profit u", value: (total.profitU >= 0 ? "+" : "") + total.profitU.toFixed(2) + "u", color: total.profitU >= 0 ? "#22c55e" : "#ef4444" },
+                  { label: "ROI", value: (total.roi >= 0 ? "+" : "") + total.roi.toFixed(2) + "%", color: total.roi >= 0 ? "#22c55e" : "#ef4444" },
+                  { label: "Win Rate", value: total.winRate.toFixed(1) + "%", color: total.winRate >= 50 ? "#22c55e" : "#f59e0b" },
+                  { label: "Bets", value: total.total, color: "#f8fafc" },
+                  { label: "Avg Odd", value: total.avgOdd.toFixed(2), color: "#f8fafc" },
+                ].map(({ label, value, color }) => (
+                  <div key={label} style={{ background: "rgba(255,255,255,0.05)", borderRadius: 12, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {Object.entries(bySport).slice(0, 3).map(([sport, s]) => (
+                <div key={sport} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderTop: "1px solid #1e293b", fontSize: 13 }}>
+                  <span style={{ color: "#94a3b8" }}>{sport}</span>
+                  <span style={{ fontWeight: 700, color: s.profitE >= 0 ? "#22c55e" : "#ef4444" }}>{s.profitE >= 0 ? "+" : ""}{s.profitE.toFixed(2)}€</span>
+                </div>
+              ))}
+
+              <div style={{ marginTop: 16, fontSize: 10, color: "#475569", textAlign: "center" }}>betting-tracker-one.vercel.app</div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+              <button onClick={() => setShowShare(false)} style={{ flex: 1, background: "#1e293b", border: "none", borderRadius: 12, padding: "12px", color: "#94a3b8", fontSize: 14, cursor: "pointer", fontWeight: 600 }}>Close</button>
+              <button onClick={() => {
+                if (navigator.share) {
+                  navigator.share({ title: "JojoH Betting Tracker", text: `${filterMonth !== "all" ? monthLabel(filterMonth) : "All Time"} — Profit: ${total.profitE >= 0 ? "+" : ""}${total.profitE.toFixed(2)}€ | ROI: ${total.roi.toFixed(2)}% | WR: ${total.winRate.toFixed(1)}%` });
+                } else {
+                  navigator.clipboard.writeText(`${filterMonth !== "all" ? monthLabel(filterMonth) : "All Time"} — Profit: ${total.profitE >= 0 ? "+" : ""}${total.profitE.toFixed(2)}€ | ROI: ${total.roi.toFixed(2)}% | WR: ${total.winRate.toFixed(1)}%`);
+                  alert("Copied to clipboard!");
+                }
+              }} style={{ flex: 2, background: "#38bdf8", border: "none", borderRadius: 12, padding: "12px", color: "#0a0f1e", fontSize: 14, cursor: "pointer", fontWeight: 800 }}>
+                Share 📤
+              </button>
+            </div>
+            <div style={{ textAlign: "center", fontSize: 11, color: "#475569", marginTop: 8 }}>Take a screenshot of the card above to share as image</div>
+          </div>
+        </div>
       )}
 
       {/* BK EDIT MODAL */}
