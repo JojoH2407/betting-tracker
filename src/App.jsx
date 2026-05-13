@@ -823,25 +823,45 @@ function ListTab({ bets, onEdit, onDelete, onExport, onImport, onDeleteAll, filt
   const [sportFilter, setSportFilter] = useState("All");
   const [showFilters, setShowFilters] = useState(false);
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("date"); // "date" | "sport"
 
   const sports = ["All", ...Object.keys(SPORTS_CONFIG)];
   const filtered = bets
     .filter(b => sportFilter === "All" || b.sport === sportFilter)
     .filter(b => !search || b.bet?.toLowerCase().includes(search.toLowerCase()) || b.league?.toLowerCase().includes(search.toLowerCase()));
-  const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date));
+  
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortBy === "sport") {
+      const sportCmp = a.sport.localeCompare(b.sport);
+      if (sportCmp !== 0) return sportCmp;
+      // within same sport, newest first by created_at then date
+      const dateB = b.created_at ?? b.date;
+      const dateA = a.created_at ?? a.date;
+      return dateB.localeCompare(dateA);
+    }
+    // default: by date desc, then created_at desc within same day
+    const dateCmp = b.date.localeCompare(a.date);
+    if (dateCmp !== 0) return dateCmp;
+    const caB = b.created_at ?? "";
+    const caA = a.created_at ?? "";
+    return caB.localeCompare(caA);
+  });
 
-  // Group by week then by day
+  // Group by week then by day (default) OR by sport
   const weeks = {};
   sorted.forEach(b => {
-    const wk = weekKey(b.date);
+    const wk = sortBy === "sport" ? b.sport : weekKey(b.date);
     if (!weeks[wk]) weeks[wk] = { dates: new Set(), bets: [] };
     weeks[wk].dates.add(b.date);
     weeks[wk].bets.push(b);
   });
 
-  const weekEntries = Object.entries(weeks).sort(([a], [b]) => b.localeCompare(a));
+  const weekEntries = Object.entries(weeks).sort(([a], [b]) =>
+    sortBy === "sport" ? a.localeCompare(b) : b.localeCompare(a)
+  );
 
   const weekLabel = (wk) => {
+    if (sortBy === "sport") return wk;
     const [year, wNum] = wk.split("-W");
     return `Week ${parseInt(wNum)} · ${year}`;
   };
@@ -877,10 +897,19 @@ function ListTab({ bets, onEdit, onDelete, onExport, onImport, onDeleteAll, filt
 
       {/* Filters */}
       {showFilters && (
-        <div style={{ background: "#111827", borderRadius: 12, padding: "12px", border: "1px solid #1e293b", display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 1 }}>Filter by sport</div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {sports.map(s => <Chip key={s} label={s} active={sportFilter === s} onClick={() => setSportFilter(s)} />)}
+        <div style={{ background: "#111827", borderRadius: 12, padding: "12px", border: "1px solid #1e293b", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Filter by sport</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {sports.map(s => <Chip key={s} label={s} active={sportFilter === s} onClick={() => setSportFilter(s)} />)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Sort by</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <Chip label="📅 Date" active={sortBy === "date"} onClick={() => setSortBy("date")} />
+              <Chip label="🏅 Sport" active={sortBy === "sport"} onClick={() => setSortBy("sport")} />
+            </div>
           </div>
         </div>
       )}
