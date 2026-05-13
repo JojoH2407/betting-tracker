@@ -1,15 +1,29 @@
-import { useState, useMemo, useEffect } from "react";
-import { createClient } from '@supabase/supabase-js';
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient(
+  "https://kxcrcxlomvrpvxcnncph.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4Y3JjeGxvbXZycHZ4Y25uY3BoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MTYwMTgsImV4cCI6MjA5NDE5MjAxOH0.-vlciOBd-go4MBck7lX4DNp5-aS5v0J1QGu4H-end4g"
+);
 
+// ── SPORTS CONFIG ─────────────────────────────────────────────────────────────
 const SPORTS_CONFIG = {
-  Tennis: { leagues: ["ATP", "WTA"], subCats: ["ML", "AH", "O/U", "Parlay"] },
-  Baseball: { leagues: ["MLB", "KBO"], subCats: ["ML", "AH", "O/U", "HR", "Total Bases", "Parlay"] },
-  Football: { leagues: ["Ligue 1", "BPL", "Liga", "Serie A", "Bundesliga", "LDC", "CDM", "Exotique"], subCats: ["ML", "AH", "O/U", "Parlay"] },
-  Basketball: { leagues: ["NBA", "EuroLeague", "Autre"], subCats: ["ML", "AH", "O/U", "Parlay"] },
+  Tennis: {
+    leagues: ["ATP", "WTA"],
+    subCats: ["ML", "AH", "O/U", "Parlay"],
+  },
+  Baseball: {
+    leagues: ["MLB", "KBO"],
+    subCats: ["ML", "AH", "O/U", "HR", "Total Bases", "Parlay"],
+  },
+  Football: {
+    leagues: ["Ligue 1", "BPL", "Liga", "Serie A", "Bundesliga", "LDC", "CDM", "Exotique"],
+    subCats: ["ML", "AH", "O/U", "Parlay"],
+  },
+  Basketball: {
+    leagues: ["NBA", "EuroLeague", "Autre"],
+    subCats: ["ML", "AH", "O/U", "Parlay"],
+  },
   eSport: { leagues: [], subCats: [] },
   "F1": { leagues: [], subCats: [] },
   Cycling: { leagues: [], subCats: [] },
@@ -17,203 +31,1012 @@ const SPORTS_CONFIG = {
 
 const SPORTS = Object.keys(SPORTS_CONFIG);
 const RESULTS = ["Pending", "Win", "Lose", "Void"];
-const RESULT_COLORS = { Win: "#22c55e", Lose: "#ef4444", Void: "#94a3b8", Pending: "#f59e0b" };
 
-const fmt = (n, d = 2) => n == null || isNaN(n) ? "0.00" : (n >= 0 ? "+" : "") + Number(n).toFixed(d);
+const RESULT_COLORS = {
+  Win: "#22c55e",
+  Lose: "#ef4444",
+  Void: "#94a3b8",
+  Pending: "#f59e0b",
+};
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+const fmt = (n, d = 2) =>
+  n == null || isNaN(n) ? "–" : (n >= 0 ? "+" : "") + Number(n).toFixed(d);
+const fmtAbs = (n, d = 2) =>
+  n == null || isNaN(n) ? "–" : Number(n).toFixed(d);
 const today = () => new Date().toISOString().slice(0, 10);
+const monthKey = (d) => d?.slice(0, 7) ?? "";
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const monthLabel = (k) => {
+  if (!k || !k.includes("-")) return k ?? "";
+  const [y, m] = k.split("-");
+  const idx = parseInt(m, 10) - 1;
+  if (idx < 0 || idx > 11) return k;
+  return `${MONTH_NAMES[idx]} ${y}`;
+};
 
+// ── STORAGE ───────────────────────────────────────────────────────────────────
+// Supabase replaces localStorage — kept as no-op for bankroll (still local for now)
+const load = (key, def) => { try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(def)); } catch { return def; } };
+const save = (key, val) => localStorage.setItem(key, JSON.stringify(val));
+
+// ── ICONS ─────────────────────────────────────────────────────────────────────
 const Ico = ({ d, size = 20 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d={d} />
+  </svg>
 );
 const Icons = {
   Plus: () => <Ico d="M12 5v14M5 12h14" />,
   List: () => <Ico d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
   Chart: () => <Ico d="M3 3v18h18M7 16l4-4 4 4 4-8" />,
-  Trash: ({ s }) => <Ico d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" size={s} />,
-  Edit: ({ s }) => <Ico d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" size={s} />,
-  Upload: () => <Ico d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />,
+  Trash: ({ s }) => <Ico d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" size={s || 20} />,
+  Edit: ({ s }) => <Ico d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" size={s || 20} />,
   Download: () => <Ico d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />,
+  Upload: () => <Ico d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />,
 };
 
+// ── PROFIT CALC ───────────────────────────────────────────────────────────────
+const calcProfit = (bet, field = "E") => {
+  const stake = field === "E" ? Number(bet.stakeE) : Number(bet.stakeU);
+  if (bet.result === "Win") return (Number(bet.odd) - 1) * stake;
+  if (bet.result === "Lose") return -stake;
+  return 0;
+};
+
+// ── SPARKLINE ─────────────────────────────────────────────────────────────────
+const Sparkline = ({ data }) => {
+  if (!data || data.length < 2) return (
+    <div style={{ textAlign: "center", color: "#475569", padding: "20px 0", fontSize: 13 }}>
+      Fill in monthly bankroll end values to see the chart
+    </div>
+  );
+  const vals = data.map((d) => d.bk);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const range = max - min || 1;
+  const W = 340, H = 80, pad = 12;
+  const pts = data.map((d, i) => {
+    const x = pad + (i / (data.length - 1)) * (W - pad * 2);
+    const y = pad + (H - pad * 2) - ((d.bk - min) / range) * (H - pad * 2);
+    return [x, y];
+  });
+  const polyline = pts.map((p) => p.join(",")).join(" ");
+  const [lx, ly] = pts[pts.length - 1];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
+      <polyline points={polyline} fill="none" stroke="#38bdf8" strokeWidth="2.5"
+        strokeLinejoin="round" strokeLinecap="round" />
+      {pts.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={3.5}
+          fill={data[i].profit >= 0 ? "#22c55e" : "#ef4444"} />
+      ))}
+      <circle cx={lx} cy={ly} r={5} fill="#38bdf8" opacity={0.9} />
+    </svg>
+  );
+};
+
+// ── STAT ROW ──────────────────────────────────────────────────────────────────
+function StatRow({ label, value, color, sub }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #1e293b" }}>
+      <div>
+        <div style={{ fontSize: 13, color: "#94a3b8" }}>{label}</div>
+        {sub && <div style={{ fontSize: 11, color: "#475569" }}>{sub}</div>}
+      </div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: color ?? "#f8fafc" }}>{value}</div>
+    </div>
+  );
+}
+
+// ── KPI ───────────────────────────────────────────────────────────────────────
+function KPI({ label, value, color, large }) {
+  return (
+    <div style={{ background: "#111827", borderRadius: 12, padding: large ? "14px 16px" : "12px 14px", border: "1px solid #1e293b", textAlign: "center" }}>
+      <div style={{ fontSize: 10, color: "#64748b", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: large ? 20 : 17, fontWeight: 800, color: color ?? "#f8fafc" }}>{value}</div>
+    </div>
+  );
+}
+
+// ── TAG ───────────────────────────────────────────────────────────────────────
+const Tag = ({ children, color }) => (
+  <span style={{
+    fontSize: 11, borderRadius: 6, padding: "2px 8px",
+    background: color ? color + "22" : "#1e293b",
+    color: color ?? "#94a3b8",
+    border: color ? `1px solid ${color}44` : "none",
+  }}>{children}</span>
+);
+
+// ── CHIP ──────────────────────────────────────────────────────────────────────
+const Chip = ({ label, active, onClick, color }) => (
+  <button onClick={onClick} style={{
+    background: active ? (color ?? "#38bdf8") + "22" : "#1e293b",
+    border: `1px solid ${active ? (color ?? "#38bdf8") : "#334155"}`,
+    color: active ? (color ?? "#38bdf8") : "#94a3b8",
+    borderRadius: 20, padding: "6px 13px", fontSize: 13, cursor: "pointer",
+    whiteSpace: "nowrap", transition: "all .15s", fontWeight: active ? 600 : 400,
+  }}>{label}</button>
+);
+
+const Pill = ({ label, active, onClick }) => (
+  <button onClick={onClick} style={{
+    background: active ? "#38bdf8" : "#1e293b", border: "none",
+    color: active ? "#0a0f1e" : "#94a3b8",
+    borderRadius: 20, padding: "4px 13px", fontSize: 12, cursor: "pointer",
+    whiteSpace: "nowrap", fontWeight: active ? 700 : 400,
+  }}>{label}</button>
+);
+
+const Input = ({ label, ...props }) => (
+  <div>
+    {label && <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>{label}</div>}
+    <input style={{
+      width: "100%", background: "#1e293b", border: "1px solid #334155",
+      borderRadius: 10, padding: "12px 14px", color: "#f8fafc", fontSize: 15,
+      outline: "none", boxSizing: "border-box", WebkitAppearance: "none",
+    }} {...props} />
+  </div>
+);
+
+const Btn = ({ children, onClick, bg, color, flex }) => (
+  <button onClick={onClick} style={{
+    background: bg ?? "#334155", border: "none", borderRadius: 12,
+    padding: "14px 16px", color: color ?? "#f8fafc",
+    fontSize: 15, cursor: "pointer", fontWeight: 700,
+    flex: flex ?? "unset", width: flex ? "100%" : "auto",
+  }}>{children}</button>
+);
+
+// ── CSV IMPORT ────────────────────────────────────────────────────────────────
+const parseCSVLine = (line) => {
+  const result = [];
+  let cur = "", inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQuote = !inQuote; }
+    else if (ch === "," && !inQuote) { result.push(cur.trim()); cur = ""; }
+    else { cur += ch; }
+  }
+  result.push(cur.trim());
+  return result;
+};
+
+const parseDate = (raw) => {
+  if (!raw) return today();
+  // dd/mm/yyyy → yyyy-mm-dd
+  const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;
+  // already yyyy-mm-dd
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  return today();
+};
+
+const parseCSV = (text) => {
+  const lines = text.trim().split(/\r?\n/);
+  const headers = parseCSVLine(lines[0]).map((h) => h.replace(/"/g, "").toLowerCase().trim());
+
+  const resultMap = { win: "Win", lose: "Lose", void: "Void", "": "", pending: "Pending" };
+  const sportMap = { tennis: "Tennis", baseball: "Baseball", mlb: "Baseball", football: "Football", basketball: "Basketball", nba: "Basketball", esport: "eSport", "e-sport": "eSport", f1: "F1", cycling: "Cycling" };
+
+  return lines.slice(1).map((line) => {
+    if (!line.trim()) return null;
+    const vals = parseCSVLine(line);
+    const row = {};
+    headers.forEach((h, i) => { row[h] = (vals[i] ?? "").replace(/^"|"$/g, "").trim(); });
+
+    const rawSport = (row.sport ?? "").toLowerCase();
+    const sport = sportMap[rawSport] ?? row.sport ?? "Tennis";
+    const rawResult = (row.result ?? "").toLowerCase();
+    const result = resultMap[rawResult] ?? (row.result || "");
+
+    // Parse odd — replace comma decimal separator
+    const parseNum = (v) => v ? parseFloat(v.replace(",", ".")) : 0;
+
+    return {
+      id: Date.now() + Math.random(),
+      date: parseDate(row.date),
+      sport,
+      league: row.league ?? row.category ?? "",
+      subCat: row.subcat ?? row.subcategory ?? row.type ?? "",
+      bet: row.bet ?? "",
+      odd: parseNum(row.odd ?? row.odds) || 1,
+      stakeE: parseNum(row["stake(€)"] ?? row.stakee ?? row["stake(e)"] ?? row.stake) || 0,
+      stakeU: parseNum(row["stake(u)"] ?? row.stakeu) || 0,
+      result: result || "",
+      note: row.note ?? "",
+    };
+  }).filter((b) => b && b.bet);
+};
+
+// ── EXPORT XLSX (via SheetJS CDN) ─────────────────────────────────────────────
+const exportXLSX = (bets) => {
+  const script = document.createElement("script");
+  script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+  script.onload = () => {
+    const XLSX = window.XLSX;
+    const rows = bets.map((b) => ({
+      Date: b.date,
+      Sport: b.sport,
+      League: b.league,
+      "Sub-cat": b.subCat,
+      Bet: b.bet,
+      Odd: Number(b.odd),
+      "Stake (€)": Number(b.stakeE),
+      "Stake (u)": Number(b.stakeU),
+      Result: b.result,
+      "Profit (€)": calcProfit(b, "E"),
+      "Profit (u)": calcProfit(b, "U"),
+      Note: b.note ?? "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Bets");
+    XLSX.writeFile(wb, "bet-tracker-export.xlsx");
+  };
+  document.head.appendChild(script);
+};
+
+// ════════════════════════════════════════════════════════════════════════════════
+// MAIN APP
+// ════════════════════════════════════════════════════════════════════════════════
 export default function App() {
   const [tab, setTab] = useState("add");
+  const [statsTab, setStatsTab] = useState("bk");
   const [bets, setBets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [bankroll, setBankrollState] = useState(() => load("bankroll_v2", {}));
   const [editId, setEditId] = useState(null);
-  const [batchForms, setBatchForms] = useState([{ date: today(), sport: "Tennis", league: "ATP", subCat: "ML", bet: "", odd: "", stakeE: 60, stakeU: 1, result: "Pending" }]);
+  const [filterMonth, setFilterMonth] = useState("all");
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
+  const [batchForms, setBatchForms] = useState([emptyBetForm()]);
+
+  const updateBets = (next) => { setBets(next); };
+  const updateBankroll = (next) => { setBankrollState(next); save("bankroll_v2", next); };
+
+  // ── Supabase: load bets on mount ──────────────────────────────────────────
   useEffect(() => {
-    async function load() {
-      const { data } = await supabase.from('bets').select('*').order('date', { ascending: false });
+    const fetchBets = async () => {
+      setLoading(true);
+      const { data, error } = await supabase.from("bets").select("*").order("date", { ascending: false });
       if (data) setBets(data);
+      if (error) console.error("Load error:", error);
       setLoading(false);
-    }
-    load();
+    };
+    fetchBets();
   }, []);
 
-  const handleSave = async () => {
+  // unit value from the date of the first form
+  const currentMonthBK = bankroll[monthKey(batchForms[0]?.date ?? today())];
+  const unitValue = currentMonthBK?.unitValue ?? null;
+
+  const handleSaveAll = async () => {
     const valid = batchForms.filter(f => f.bet && f.odd);
     if (!valid.length) return;
-    if (editId) {
-      await supabase.from('bets').update(valid[0]).eq('id', editId);
-      setBets(bets.map(b => b.id === editId ? { ...valid[0], id: editId } : b));
+    if (editId !== null) {
+      const f = valid[0];
+      const stakeU = unitValue ? (Number(f.stakeE) / unitValue).toFixed(2) : f.stakeU;
+      const entry = { date: f.date, sport: f.sport, league: f.league, subCat: f.subCat, bet: f.bet, odd: Number(f.odd), stakeE: Number(f.stakeE), stakeU: Number(stakeU), result: f.result, note: f.note ?? "" };
+      const { error } = await supabase.from("bets").update(entry).eq("id", editId);
+      if (!error) setBets(bets.map((b) => (b.id === editId ? { ...entry, id: editId } : b)));
+      else alert("Error saving: " + error.message);
       setEditId(null);
     } else {
-      const { data } = await supabase.from('bets').insert(valid).select();
+      const newEntries = valid.map(f => {
+        const stakeU = unitValue ? (Number(f.stakeE) / unitValue).toFixed(2) : f.stakeU;
+        return { date: f.date, sport: f.sport, league: f.league, subCat: f.subCat, bet: f.bet, odd: Number(f.odd), stakeE: Number(f.stakeE), stakeU: Number(stakeU), result: f.result, note: f.note ?? "" };
+      });
+      const { data, error } = await supabase.from("bets").insert(newEntries).select();
       if (data) setBets([...data, ...bets]);
+      else alert("Error saving: " + error.message);
     }
-    setBatchForms([{ date: today(), sport: "Tennis", league: "ATP", subCat: "ML", bet: "", odd: "", stakeE: 60, stakeU: 1, result: "Pending" }]);
+    setBatchForms([emptyBetForm()]);
     setTab("list");
   };
 
-  const importCSV = (e) => {
-    const file = e.target.files[0];
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      const content = evt.target.result;
-      const lines = content.split("\n").filter(l => l.trim() !== "");
-      // On ignore le header s'il existe
-      const startIdx = (lines[0].toLowerCase().includes("date")) ? 1 : 0;
-      
-      const toInsert = lines.slice(startIdx).map(l => {
-        const p = l.split(",");
-        if (p.length < 6) return null;
-        return {
-          date: p[0]?.trim() || today(),
-          sport: p[1]?.trim() || "Tennis",
-          league: p[2]?.trim() || "",
-          subCat: p[3]?.trim() || "",
-          bet: p[4]?.trim() || "Pari importé",
-          odd: parseFloat(p[5]) || 0,
-          stakeE: parseFloat(p[6]) || 60,
-          stakeU: parseFloat(p[7]) || 1,
-          result: p[8]?.trim() || "Pending"
-        };
-      }).filter(x => x && x.odd > 0);
-
-      if (toInsert.length > 0) {
-        const { data, error } = await supabase.from('bets').insert(toInsert).select();
-        if (error) alert("Erreur import: " + error.message);
-        if (data) setBets([...data, ...bets]);
-      }
-    };
-    reader.readAsText(file);
+  const startEdit = (bet) => { setBatchForms([{ ...bet }]); setEditId(bet.id); setTab("add"); };
+  
+  const deleteBet = async (id) => {
+    const { error } = await supabase.from("bets").delete().eq("id", id);
+    if (!error) setBets(bets.filter((b) => b.id !== id));
+    else alert("Error deleting: " + error.message);
+    setDeleteConfirm(null);
   };
 
-  const stats = useMemo(() => {
-    let pE = 0, invE = 0, wins = 0, settled = 0;
-    bets.forEach(b => {
-      if (b.result === "Win") { pE += (b.odd - 1) * b.stakeE; wins++; settled++; invE += b.stakeE; }
-      else if (b.result === "Lose") { pE -= b.stakeE; settled++; invE += b.stakeE; }
-    });
-    return { profitE: pE, roi: invE ? (pE / invE) * 100 : 0, count: bets.length, wr: settled ? (wins / settled) * 100 : 0 };
-  }, [bets]);
+  // months
+  const allMonths = useMemo(() => [...new Set(bets.map((b) => monthKey(b.date)))].sort(), [bets]);
 
-  if (loading) return <div style={{ height: "100vh", background: "#0a0f1e", display: "flex", alignItems: "center", justifyContent: "center", color: "#38bdf8", fontFamily: "sans-serif" }}>Chargement...</div>;
+  const filtered = useMemo(() =>
+    filterMonth === "all" ? bets : bets.filter((b) => monthKey(b.date) === filterMonth),
+    [bets, filterMonth]);
+
+  // group stats helper
+  const groupStats = (bets, key) => {
+    const map = {};
+    bets.forEach((b) => {
+      const k = b[key] || "–";
+      if (!map[k]) map[k] = { bets: [], wins: 0, profitE: 0, profitU: 0, totalInvE: 0, oddsSum: 0, oddsCount: 0 };
+      const s = map[k];
+      s.bets.push(b);
+      if (b.result === "Win") { s.wins++; s.profitE += calcProfit(b, "E"); s.profitU += calcProfit(b, "U"); }
+      else if (b.result === "Lose") { s.profitE += calcProfit(b, "E"); s.profitU += calcProfit(b, "U"); }
+      if (b.result !== "Void" && b.result !== "Pending") { s.totalInvE += Number(b.stakeE); }
+      if (b.odd) { s.oddsSum += Number(b.odd); s.oddsCount++; }
+    });
+    return map;
+  };
+
+  const bySport = useMemo(() => groupStats(filtered, "sport"), [filtered]);
+  const byLeague = useMemo(() => groupStats(filtered, "league"), [filtered]);
+
+  const total = useMemo(() => {
+    let wins = 0, settled = 0, profitE = 0, profitU = 0, totalInvE = 0, totalInvU = 0, oddsSum = 0, oddsCount = 0;
+    filtered.forEach((b) => {
+      if (b.result !== "Void" && b.result !== "Pending") settled++;
+      if (b.result === "Win") { wins++; profitE += calcProfit(b, "E"); profitU += calcProfit(b, "U"); }
+      else if (b.result === "Lose") { profitE += calcProfit(b, "E"); profitU += calcProfit(b, "U"); }
+      if (b.result !== "Void" && b.result !== "Pending") { totalInvE += Number(b.stakeE); totalInvU += Number(b.stakeU); }
+      if (b.odd) { oddsSum += Number(b.odd); oddsCount++; }
+    });
+    return {
+      total: filtered.length, wins, settled,
+      winRate: settled ? (wins / settled) * 100 : 0,
+      profitE, profitU, totalInvE, totalInvU,
+      roi: totalInvE ? (profitE / totalInvE) * 100 : 0,
+      avgOdd: oddsCount ? oddsSum / oddsCount : 0,
+      avgStakeU: settled ? totalInvU / settled : 0,
+    };
+  }, [filtered]);
+
+  const bkChartData = useMemo(() =>
+    allMonths.map((mk) => {
+      const bkEntry = bankroll[mk] ?? {};
+      const bkVal = bkEntry.end ?? 0;
+      const profit = bets.filter((b) => monthKey(b.date) === mk).reduce((acc, b) => acc + calcProfit(b, "E"), 0);
+      return { label: monthLabel(mk), bk: bkVal, profit, mk };
+    }).filter((d) => d.bk > 0),
+    [allMonths, bets, bankroll]);
+
+  const maxProfitAbs = Math.max(...Object.values(bySport).map((s) => Math.abs(s.profitE)), 1);
+
+  // CSV import → Supabase
+  const handleCSVImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const imported = parseCSV(ev.target.result);
+      if (!imported.length) { alert("No valid bets found in CSV"); return; }
+      // Strip client-side ids before insert
+      const toInsert = imported.map(({ id, ...rest }) => ({
+        date: rest.date, sport: rest.sport, league: rest.league ?? "",
+        subCat: rest.subCat ?? "", bet: rest.bet, odd: Number(rest.odd),
+        stakeE: Number(rest.stakeE), stakeU: Number(rest.stakeU),
+        result: rest.result || "", note: rest.note ?? "",
+      }));
+      const { data, error } = await supabase.from("bets").insert(toInsert).select();
+      if (data) { setBets([...data, ...bets]); alert(`✅ ${data.length} bets imported!`); }
+      else alert("Import error: " + error.message);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  if (loading) return (
+    <div style={{ height: "100vh", background: "#0a0f1e", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#38bdf8", fontFamily: "sans-serif", gap: 16 }}>
+      <div style={{ fontSize: 32 }}>🎯</div>
+      <div style={{ fontSize: 14, color: "#64748b" }}>Loading your bets...</div>
+    </div>
+  );
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0f1e", color: "#f8fafc", maxWidth: 500, margin: "0 auto", paddingBottom: 120, fontFamily: "-apple-system, system-ui, sans-serif" }}>
-      
-      {/* HEADER FIXE */}
-      <div style={{ padding: "20px 15px", background: "#0f172a", borderBottom: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 10 }}>
-        <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: -0.5 }}>BetTracker <span style={{ color: "#38bdf8" }}>Cloud</span></div>
-        <div style={{ display: "flex", gap: 15 }}>
-           <label style={{ cursor: "pointer", color: "#94a3b8" }}><Icons.Upload /><input type="file" hidden accept=".csv" onChange={importCSV} /></label>
-           <button onClick={() => {}} style={{ background: "none", border: "none", color: "#94a3b8" }}><Icons.Download /></button>
+    <div style={{ minHeight: "100vh", background: "#0a0f1e", color: "#e2e8f0", fontFamily: "'SF Pro Display', 'Helvetica Neue', sans-serif", maxWidth: 500, margin: "0 auto", paddingBottom: 90 }}>
+
+      {/* HEADER */}
+      <div style={{ background: "#0f172a", padding: "18px 18px 14px", borderBottom: "1px solid #1e293b", position: "sticky", top: 0, zIndex: 10 }}>
+        <div style={{ fontSize: 10, letterSpacing: 3, color: "#38bdf8", textTransform: "uppercase", marginBottom: 2 }}>BET TRACKER</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#f8fafc", marginBottom: 10 }}>
+          {filterMonth === "all" ? "All Time" : monthLabel(filterMonth)}
+        </div>
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
+          <Pill label="All" active={filterMonth === "all"} onClick={() => setFilterMonth("all")} />
+          {allMonths.map((mk) => <Pill key={mk} label={monthLabel(mk)} active={filterMonth === mk} onClick={() => setFilterMonth(mk)} />)}
         </div>
       </div>
 
-      <div style={{ padding: 15 }}>
+      <div style={{ padding: "16px 16px 0" }}>
         {tab === "add" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ margin: 0, fontSize: 20 }}>{editId ? "Modifier" : "Ajouter"}</h3>
-              {!editId && <button onClick={() => setBatchForms([...batchForms, { date: today(), sport: "Tennis", league: "ATP", subCat: "ML", bet: "", odd: "", stakeE: 60, stakeU: 1, result: "Pending" }])} style={{ background: "#1e293b", color: "#38bdf8", border: "none", padding: "8px 12px", borderRadius: 10, fontWeight: 600, fontSize: 13 }}>+ Ajouter une ligne</button>}
-            </div>
-
-            {batchForms.map((f, i) => (
-              <div key={i} style={{ background: "#111827", padding: 15, borderRadius: 18, border: "1px solid #1e293b", display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <input type="date" value={f.date} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, date: e.target.value } : x))} style={{ flex: 1.2, background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 12, fontSize: 14 }} />
-                  <select value={f.sport} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, sport: e.target.value } : x))} style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 12, fontSize: 14 }}>
-                    {SPORTS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-
-                <div style={{ display: "flex", gap: 10 }}>
-                  <select value={f.league} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, league: e.target.value } : x))} style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 12 }}>
-                    {SPORTS_CONFIG[f.sport].leagues.map(l => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                  <select value={f.subCat} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, subCat: e.target.value } : x))} style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 12 }}>
-                    {SPORTS_CONFIG[f.sport].subCats.map(sc => <option key={sc} value={sc}>{sc}</option>)}
-                  </select>
-                </div>
-
-                <input placeholder="Nom du pari / Détails" value={f.bet} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, bet: e.target.value } : x))} style={{ background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 14, borderRadius: 12, fontSize: 15 }} />
-
-                <div style={{ display: "flex", gap: 10 }}>
-                  <div style={{ flex: 1 }}><label style={{ fontSize: 10, color: "#64748b", fontWeight: 700 }}>COTE</label><input type="number" step="0.01" value={f.odd} onChange={e => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, odd: parseFloat(e.target.value) } : x))} style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 12, boxSizing: "border-box" }} /></div>
-                  <div style={{ flex: 1 }}><label style={{ fontSize: 10, color: "#64748b", fontWeight: 700 }}>UNITÉ (U)</label><input type="number" step="0.1" value={f.stakeU} onChange={e => { const v = parseFloat(e.target.value); setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, stakeU: v, stakeE: v * 60 } : x)); }} style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 12, boxSizing: "border-box" }} /></div>
-                  <div style={{ flex: 1 }}><label style={{ fontSize: 10, color: "#64748b", fontWeight: 700 }}>MISE €</label><input type="number" value={f.stakeE} onChange={e => { const v = parseFloat(e.target.value); setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, stakeE: v, stakeU: v / 60 } : x)); }} style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", color: "#fff", padding: 12, borderRadius: 12, boxSizing: "border-box" }} /></div>
-                </div>
-
-                <div style={{ display: "flex", gap: 6 }}>
-                  {RESULTS.map(r => <button key={r} onClick={() => setBatchForms(batchForms.map((x, idx) => idx === i ? { ...x, result: r } : x))} style={{ flex: 1, padding: "10px 5px", borderRadius: 10, fontSize: 12, fontWeight: 700, border: "1px solid", borderColor: f.result === r ? RESULT_COLORS[r] : "#334155", background: f.result === r ? RESULT_COLORS[r] + "20" : "#1e293b", color: f.result === r ? RESULT_COLORS[r] : "#94a3b8" }}>{r}</button>)}
-                </div>
-              </div>
-            ))}
-            <button onClick={handleSave} style={{ background: "#38bdf8", color: "#0f172a", padding: 18, borderRadius: 15, border: "none", fontWeight: 800, fontSize: 16, marginTop: 5 }}>ENREGISTRER DANS LE CLOUD</button>
-          </div>
+          <AddTab batchForms={batchForms} setBatchForms={setBatchForms}
+            handleSaveAll={handleSaveAll} editId={editId} setEditId={setEditId}
+            setTab={setTab} emptyForm={emptyBetForm()} unitValue={unitValue} />
         )}
-
         {tab === "list" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {bets.map(b => (
-              <div key={b.id} style={{ background: "#111827", padding: 15, borderRadius: 18, borderLeft: `6px solid ${RESULT_COLORS[b.result]}`, position: "relative" }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <div>
-                    <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>{b.date} • {b.sport}</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, margin: "4px 0" }}>{b.bet} <span style={{ color: "#475569", fontSize: 12 }}>({b.subCat})</span></div>
-                    <div style={{ fontSize: 13, color: "#94a3b8" }}>@{b.odd} • {b.stakeE}€ <span style={{ fontSize: 11 }}>({b.stakeU}u)</span></div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ color: RESULT_COLORS[b.result], fontWeight: 900, fontSize: 16 }}>{b.result === "Win" ? "+" + ((b.odd - 1) * b.stakeE).toFixed(2) + "€" : b.result}</div>
-                    <div style={{ display: "flex", gap: 15, marginTop: 12, justifyContent: "flex-end" }}>
-                      <button onClick={() => { setBatchForms([{...b}]); setEditId(b.id); setTab("add"); }} style={{ background: "none", border: "none", color: "#475569" }}><Icons.Edit s={18} /></button>
-                      <button onClick={async () => { await supabase.from('bets').delete().eq('id', b.id); setBets(bets.filter(x => x.id !== b.id)); }} style={{ background: "none", border: "none", color: "#ef4444" }}><Icons.Trash s={18} /></button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <ListTab bets={filtered} onEdit={startEdit} onDelete={setDeleteConfirm}
+            onExport={() => exportXLSX(bets)} onImport={handleCSVImport}
+            filterMonth={filterMonth}
+            onDeleteAll={async () => {
+              if (filterMonth === "all") {
+                const { error } = await supabase.from("bets").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+                if (!error) setBets([]);
+              } else {
+                const toDelete = bets.filter((b) => monthKey(b.date) === filterMonth);
+                const ids = toDelete.map(b => b.id);
+                const { error } = await supabase.from("bets").delete().in("id", ids);
+                if (!error) setBets(bets.filter((b) => monthKey(b.date) !== filterMonth));
+              }
+            }} />
         )}
-
         {tab === "stats" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div style={{ background: "#111827", padding: 20, borderRadius: 18, textAlign: "center", border: "1px solid #1e293b" }}><div style={{ fontSize: 11, color: "#64748b", marginBottom: 5 }}>PROFIT TOTAL</div><div style={{ fontSize: 22, fontWeight: 900, color: stats.profitE >= 0 ? "#22c55e" : "#ef4444" }}>{fmt(stats.profitE)}€</div></div>
-            <div style={{ background: "#111827", padding: 20, borderRadius: 18, textAlign: "center", border: "1px solid #1e293b" }}><div style={{ fontSize: 11, color: "#64748b", marginBottom: 5 }}>ROI</div><div style={{ fontSize: 22, fontWeight: 900, color: stats.roi >= 0 ? "#22c55e" : "#ef4444" }}>{fmt(stats.roi)}%</div></div>
-            <div style={{ background: "#111827", padding: 20, borderRadius: 18, textAlign: "center", border: "1px solid #1e293b" }}><div style={{ fontSize: 11, color: "#64748b", marginBottom: 5 }}>PARIS</div><div style={{ fontSize: 22, fontWeight: 900 }}>{stats.count}</div></div>
-            <div style={{ background: "#111827", padding: 20, borderRadius: 18, textAlign: "center", border: "1px solid #1e293b" }}><div style={{ fontSize: 11, color: "#64748b", marginBottom: 5 }}>WIN RATE</div><div style={{ fontSize: 22, fontWeight: 900 }}>{stats.wr.toFixed(1)}%</div></div>
-          </div>
+          <StatsTab total={total} bySport={bySport} byLeague={byLeague}
+            maxProfitAbs={maxProfitAbs} bkChartData={bkChartData}
+            bankroll={bankroll} updateBankroll={updateBankroll}
+            allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab}
+            bets={bets} />
         )}
       </div>
 
-      {/* BARRE DE NAVIGATION */}
-      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#0f172a", display: "flex", justifyContent: "space-around", padding: "15px 0 35px", borderTop: "1px solid #1e293b", zIndex: 100 }}>
-        <button onClick={() => setTab("add")} style={{ background: "none", border: "none", color: tab === "add" ? "#38bdf8" : "#475569", display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
-          <Icons.Plus />
-          <span style={{ fontSize: 11, fontWeight: 700 }}>Ajouter</span>
-        </button>
-        <button onClick={() => setTab("list")} style={{ background: "none", border: "none", color: tab === "list" ? "#38bdf8" : "#475569", display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
-          <Icons.List />
-          <span style={{ fontSize: 11, fontWeight: 700 }}>Paris</span>
-        </button>
-        <button onClick={() => setTab("stats")} style={{ background: "none", border: "none", color: tab === "stats" ? "#38bdf8" : "#475569", display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
-          <Icons.Chart />
-          <span style={{ fontSize: 11, fontWeight: 700 }}>Stats</span>
-        </button>
+      {/* NAV */}
+      <nav style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 500, background: "#0f172a", borderTop: "1px solid #1e293b", display: "flex", justifyContent: "space-around", padding: "10px 0 24px", zIndex: 20 }}>
+        {[
+          { key: "add", label: editId ? "Edit" : "Add", icon: <Icons.Plus /> },
+          { key: "list", label: "Bets", icon: <Icons.List /> },
+          { key: "stats", label: "Stats", icon: <Icons.Chart /> },
+        ].map(({ key, label, icon }) => (
+          <button key={key} onClick={() => setTab(key)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, color: tab === key ? "#38bdf8" : "#475569", fontSize: 11, fontWeight: 600, letterSpacing: 0.5 }}>
+            {icon}{label}
+          </button>
+        ))}
       </nav>
+
+      {/* DELETE MODAL */}
+      {deleteConfirm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
+          <div style={{ background: "#1e293b", borderRadius: 16, padding: 24, margin: 20, border: "1px solid #334155", maxWidth: 320, width: "100%" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Delete this bet?</div>
+            <div style={{ color: "#94a3b8", fontSize: 14, marginBottom: 20 }}>This action cannot be undone.</div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <Btn onClick={() => setDeleteConfirm(null)} flex={1}>Cancel</Btn>
+              <Btn onClick={() => deleteBet(deleteConfirm)} bg="#ef4444" flex={1}>Delete</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// ADD TAB
+// ════════════════════════════════════════════════════════════════════════════════
+
+const emptyBetForm = (base = {}) => ({
+  date: base.date ?? new Date().toISOString().slice(0, 10),
+  sport: base.sport ?? "Tennis",
+  league: base.league ?? "ATP",
+  subCat: base.subCat ?? "ML",
+  bet: "",
+  odd: "",
+  stakeE: base.stakeE ?? 60,
+  stakeU: base.stakeU ?? 1,
+  result: "Pending",
+  note: "",
+});
+
+function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
+  const cfg = SPORTS_CONFIG[form.sport] ?? { leagues: [], subCats: [] };
+  const hasLeague = cfg.leagues.length > 0;
+  const hasSubCat = cfg.subCats.length > 0;
+  const computedU = unitValue ? (Number(form.stakeE) / unitValue).toFixed(2) : null;
+
+  const set = (k, v) => {
+    const next = { ...form, [k]: v };
+    if (k === "sport") {
+      next.league = SPORTS_CONFIG[v]?.leagues[0] ?? "";
+      next.subCat = SPORTS_CONFIG[v]?.subCats[0] ?? "";
+    }
+    onChange(next);
+  };
+
+  return (
+    <div style={{ background: "#111827", borderRadius: 14, padding: "14px", border: "1px solid #1e293b", display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#38bdf8", textTransform: "uppercase", letterSpacing: 1 }}>Bet {index + 1}</div>
+        {canRemove && (
+          <button onClick={onRemove} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "2px 6px" }}>×</button>
+        )}
+      </div>
+
+      {/* Date */}
+      <Input label="Date" type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
+
+      {/* Sport */}
+      <div>
+        <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Sport</div>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+          {Object.keys(SPORTS_CONFIG).map((s) => <Chip key={s} label={s} active={form.sport === s} onClick={() => set("sport", s)} />)}
+        </div>
+      </div>
+
+      {/* League */}
+      {hasLeague && (
+        <div>
+          <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>League</div>
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+            {cfg.leagues.map((l) => <Chip key={l} label={l} active={form.league === l} onClick={() => set("league", l)} />)}
+          </div>
+        </div>
+      )}
+
+      {/* SubCat */}
+      {hasSubCat && (
+        <div>
+          <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Type</div>
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+            {cfg.subCats.map((s) => <Chip key={s} label={s} active={form.subCat === s} onClick={() => set("subCat", s)} />)}
+          </div>
+        </div>
+      )}
+
+      {/* Bet description */}
+      <Input placeholder="e.g. Djokovic vs Alcaraz ML" value={form.bet} onChange={(e) => set("bet", e.target.value)} />
+
+      {/* Odd + Stakes */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+        <Input label="Odd" type="number" step="0.001" placeholder="2.100" value={form.odd} onChange={(e) => set("odd", e.target.value)} />
+        <Input label="Stake €" type="number" value={form.stakeE} onChange={(e) => set("stakeE", e.target.value)} />
+        <div>
+          <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Stake u</div>
+          {computedU
+            ? <div style={{ background: "#1e293b", border: "1px solid #38bdf833", borderRadius: 10, padding: "12px 14px", fontSize: 14, color: "#38bdf8", fontWeight: 700 }}>{computedU}u</div>
+            : <input type="number" step="0.25" value={form.stakeU} onChange={(e) => set("stakeU", e.target.value)}
+                style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: "12px 14px", color: "#f8fafc", fontSize: 14, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" }} />
+          }
+        </div>
+      </div>
+
+      {/* Result */}
+      <div>
+        <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Result</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {RESULTS.map((r) => <Chip key={r} label={r} active={form.result === r} onClick={() => set("result", r)} color={RESULT_COLORS[r]} />)}
+        </div>
+      </div>
+
+      {/* Note */}
+      <Input label="Note (optional)" placeholder="Analysis, context..." value={form.note} onChange={(e) => set("note", e.target.value)} />
+    </div>
+  );
+}
+
+function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, setTab, emptyForm, unitValue }) {
+  const addForm = () => {
+    const last = batchForms[batchForms.length - 1];
+    setBatchForms([...batchForms, emptyBetForm({ date: last.date, sport: last.sport, league: last.league, subCat: last.subCat, stakeE: last.stakeE, stakeU: last.stakeU })]);
+  };
+  const updateForm = (i, val) => setBatchForms(batchForms.map((f, idx) => idx === i ? val : f));
+  const removeForm = (i) => setBatchForms(batchForms.filter((_, idx) => idx !== i));
+
+  const validCount = batchForms.filter(f => f.bet && f.odd).length;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1 }}>
+          {editId ? "✏️ Edit Bet" : `➕ New Bets (${batchForms.length})`}
+        </div>
+        {editId && <button onClick={() => { setEditId(null); setBatchForms([emptyBetForm()]); setTab("list"); }} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 13 }}>Cancel</button>}
+      </div>
+
+      {batchForms.map((f, i) => (
+        <BetForm key={i} index={i} form={f} onChange={(val) => updateForm(i, val)}
+          onRemove={() => removeForm(i)} unitValue={unitValue} canRemove={batchForms.length > 1} />
+      ))}
+
+      {!editId && (
+        <button onClick={addForm} style={{ background: "#1e293b", border: "1px dashed #334155", borderRadius: 12, padding: "12px", color: "#38bdf8", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+          + Add another bet
+        </button>
+      )}
+
+      <button onClick={handleSaveAll} style={{ background: "#38bdf8", border: "none", borderRadius: 12, padding: "16px", color: "#0a0f1e", fontSize: 16, fontWeight: 800, cursor: "pointer", position: "sticky", bottom: 90 }}>
+        {editId ? "Update" : `Save ${validCount > 1 ? validCount + " bets" : "bet"}`}
+      </button>
+    </div>
+  );
+}
+
+// LIST TAB
+// ════════════════════════════════════════════════════════════════════════════════
+
+const getWeekNumber = (dateStr) => {
+  const d = new Date(dateStr + "T12:00:00");
+  const startOfYear = new Date(d.getFullYear(), 0, 1);
+  const diff = d - startOfYear + (startOfYear.getTimezoneOffset() - d.getTimezoneOffset()) * 60000;
+  return Math.ceil((diff / 86400000 + startOfYear.getDay() + 1) / 7);
+};
+
+const weekKey = (dateStr) => {
+  const d = new Date(dateStr + "T12:00:00");
+  return `${d.getFullYear()}-W${String(getWeekNumber(dateStr)).padStart(2, "0")}`;
+};
+
+function DayGroup({ date, bets, onEdit, onDelete, defaultOpen }) {
+  const [open, setOpen] = useState(defaultOpen ?? true);
+  const profitE = bets.reduce((a, b) => a + calcProfit(b, "E"), 0);
+  const profitU = bets.reduce((a, b) => a + calcProfit(b, "U"), 0);
+  const settled = bets.filter(b => b.result !== "Pending" && b.result !== "Void");
+  const hasSettled = settled.length > 0;
+  const d = new Date(date + "T12:00:00");
+  const dateLabel = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }).toUpperCase();
+
+  return (
+    <div>
+      <button onClick={() => setOpen(o => !o)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", marginBottom: open ? 8 : 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, color: "#64748b", letterSpacing: 2, textTransform: "uppercase" }}>{dateLabel}</span>
+          <span style={{ fontSize: 11, color: "#475569" }}>({bets.length})</span>
+          <span style={{ fontSize: 12, color: "#475569" }}>{open ? "▾" : "▸"}</span>
+        </div>
+        {hasSettled && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: profitE >= 0 ? "#22c55e" : "#ef4444" }}>{fmt(profitE)}€</span>
+            <span style={{ fontSize: 11, color: profitU >= 0 ? "#22c55e99" : "#ef444499" }}>{fmt(profitU)}u</span>
+          </div>
+        )}
+      </button>
+      {open && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 4 }}>
+          {bets.map((b) => <BetCard key={b.id} bet={b} onEdit={onEdit} onDelete={onDelete} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WeekGroup({ weekLabel, days, bets, onEdit, onDelete, defaultOpen }) {
+  const [open, setOpen] = useState(defaultOpen ?? true);
+  const profitE = bets.reduce((a, b) => a + calcProfit(b, "E"), 0);
+  const profitU = bets.reduce((a, b) => a + calcProfit(b, "U"), 0);
+  const settled = bets.filter(b => b.result !== "Pending" && b.result !== "Void");
+  const hasSettled = settled.length > 0;
+
+  return (
+    <div style={{ background: "#0d1525", borderRadius: 12, border: "1px solid #1e293b", overflow: "hidden", marginBottom: 4 }}>
+      <button onClick={() => setOpen(o => !o)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#38bdf8", letterSpacing: 2, textTransform: "uppercase" }}>{weekLabel}</span>
+          <span style={{ fontSize: 11, color: "#475569" }}>· {bets.length} bets</span>
+          <span style={{ fontSize: 12, color: "#475569" }}>{open ? "▾" : "▸"}</span>
+        </div>
+        {hasSettled && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: profitE >= 0 ? "#22c55e" : "#ef4444" }}>{fmt(profitE)}€</span>
+            <span style={{ fontSize: 11, color: profitU >= 0 ? "#22c55e99" : "#ef444499" }}>{fmt(profitU)}u</span>
+          </div>
+        )}
+      </button>
+      {open && (
+        <div style={{ padding: "0 12px 12px" }}>
+          {days.map(date => (
+            <DayGroup key={date} date={date} bets={bets.filter(b => b.date === date)} onEdit={onEdit} onDelete={onDelete} defaultOpen={true} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ListTab({ bets, onEdit, onDelete, onExport, onImport, onDeleteAll, filterMonth }) {
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
+  const [sportFilter, setSportFilter] = useState("All");
+  const [showFilters, setShowFilters] = useState(false);
+
+  const sports = ["All", ...Object.keys(SPORTS_CONFIG)];
+  const filtered = sportFilter === "All" ? bets : bets.filter(b => b.sport === sportFilter);
+  const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date));
+
+  // Group by week then by day
+  const weeks = {};
+  sorted.forEach(b => {
+    const wk = weekKey(b.date);
+    if (!weeks[wk]) weeks[wk] = { dates: new Set(), bets: [] };
+    weeks[wk].dates.add(b.date);
+    weeks[wk].bets.push(b);
+  });
+
+  const weekEntries = Object.entries(weeks).sort(([a], [b]) => b.localeCompare(a));
+
+  const weekLabel = (wk) => {
+    const [year, wNum] = wk.split("-W");
+    return `Week ${parseInt(wNum)} · ${year}`;
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* toolbar */}
+      <div style={{ display: "flex", gap: 8 }}>
+        <label style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: "10px", color: "#94a3b8", fontSize: 13, cursor: "pointer", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          <Icons.Upload /> Import CSV
+          <input type="file" accept=".csv" onChange={onImport} style={{ display: "none" }} />
+        </label>
+        <button onClick={onExport} style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: "10px", color: "#94a3b8", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          <Icons.Download /> Export XLSX
+        </button>
+        <button onClick={() => setShowFilters(f => !f)} style={{ background: showFilters ? "#38bdf822" : "#1e293b", border: `1px solid ${showFilters ? "#38bdf8" : "#334155"}`, borderRadius: 10, padding: "10px 12px", color: showFilters ? "#38bdf8" : "#94a3b8", fontSize: 13, cursor: "pointer" }}>
+          ⚙︎
+        </button>
+      </div>
+
+      {/* Filters */}
+      {showFilters && (
+        <div style={{ background: "#111827", borderRadius: 12, padding: "12px", border: "1px solid #1e293b", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 1 }}>Filter by sport</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {sports.map(s => <Chip key={s} label={s} active={sportFilter === s} onClick={() => setSportFilter(s)} />)}
+          </div>
+        </div>
+      )}
+
+      {/* Delete all */}
+      {showDeleteAll ? (
+        <div style={{ background: "#1e293b", border: "1px solid #ef4444", borderRadius: 12, padding: "14px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#f8fafc" }}>Delete {filterMonth === "all" ? "all" : "this month's"} bets?</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setShowDeleteAll(false)} style={{ flex: 1, background: "#334155", border: "none", borderRadius: 10, padding: "10px", color: "#f8fafc", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+            <button onClick={() => { onDeleteAll(); setShowDeleteAll(false); }} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 10, padding: "10px", color: "#fff", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>Yes, delete</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setShowDeleteAll(true)} style={{ background: "none", border: "1px solid #ef444433", borderRadius: 10, padding: "8px", color: "#ef4444", fontSize: 12, cursor: "pointer", width: "100%" }}>
+          🗑 Delete {filterMonth === "all" ? "all" : "this month's"} bets
+        </button>
+      )}
+
+      {sorted.length === 0 && (
+        <div style={{ textAlign: "center", color: "#475569", padding: "60px 20px" }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
+          <div>No bets for this period</div>
+        </div>
+      )}
+
+      {/* Weeks */}
+      {weekEntries.map(([wk, { bets: wBets, dates }]) => {
+        const sortedDates = [...dates].sort((a, b) => b.localeCompare(a));
+        return (
+          <WeekGroup key={wk} weekLabel={weekLabel(wk)} days={sortedDates} bets={wBets} onEdit={onEdit} onDelete={onDelete} defaultOpen={true} />
+        );
+      })}
+    </div>
+  );
+}
+
+function BetCard({ bet, onEdit, onDelete }) {
+  const profitE = calcProfit(bet, "E");
+  return (
+    <div style={{ background: "#111827", borderRadius: 12, padding: "12px 14px", border: `1px solid ${RESULT_COLORS[bet.result]}33` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", gap: 5, marginBottom: 6, flexWrap: "wrap" }}>
+            <Tag>{bet.sport}</Tag>
+            {bet.league && <Tag>{bet.league}</Tag>}
+            {bet.subCat && <Tag>{bet.subCat}</Tag>}
+            <Tag color={RESULT_COLORS[bet.result]}>{bet.result}</Tag>
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.3, marginBottom: 5 }}>{bet.bet}</div>
+          <div style={{ fontSize: 12, color: "#64748b", display: "flex", gap: 12 }}>
+            <span>@{Number(bet.odd).toFixed(3)}</span>
+            <span>{bet.stakeE}€ / {Number(bet.stakeU).toFixed(2)}u</span>
+          </div>
+          {bet.note && <div style={{ fontSize: 12, color: "#64748b", marginTop: 4, fontStyle: "italic" }}>{bet.note}</div>}
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          {bet.result !== "Pending" && bet.result !== "Void" && (
+            <div style={{ fontSize: 15, fontWeight: 700, color: profitE >= 0 ? "#22c55e" : "#ef4444" }}>
+              {fmt(profitE)}€
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 6, marginTop: 8, justifyContent: "flex-end" }}>
+            <button onClick={() => onEdit(bet)} style={{ background: "#1e293b", border: "none", borderRadius: 8, padding: 6, cursor: "pointer", color: "#94a3b8", display: "flex" }}><Icons.Edit s={14} /></button>
+            <button onClick={() => onDelete(bet.id)} style={{ background: "#1e293b", border: "none", borderRadius: 8, padding: 6, cursor: "pointer", color: "#ef444499", display: "flex" }}><Icons.Trash s={14} /></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// STATS TAB
+// ════════════════════════════════════════════════════════════════════════════════
+function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankroll, updateBankroll, allMonths, statsTab, setStatsTab, bets }) {
+  const [bkEdit, setBkEdit] = useState(null);
+  const [bkForm, setBkForm] = useState({ start: "", end: "", unitValue: "", fees: "" });
+
+  const openBkEdit = (mk) => {
+    setBkEdit(mk);
+    const bk = bankroll[mk] ?? {};
+    setBkForm({ start: bk.start ?? "", end: bk.end ?? "", unitValue: bk.unitValue ?? "", fees: bk.fees ?? "" });
+  };
+  const saveBk = () => {
+    updateBankroll({ ...bankroll, [bkEdit]: { start: Number(bkForm.start), end: Number(bkForm.end), unitValue: Number(bkForm.unitValue), fees: Number(bkForm.fees) } });
+    setBkEdit(null);
+  };
+
+  // Running balance per month = start BK + profit from bets
+  const runningBalance = (mk) => {
+    const bk = bankroll[mk] ?? {};
+    if (!bk.start) return null;
+    const profit = bets.filter((b) => monthKey(b.date) === mk).reduce((acc, b) => acc + calcProfit(b, "E"), 0);
+    return bk.start + profit;
+  };
+
+  const renderGroup = (map, maxAbs) => Object.entries(map).map(([name, s]) => {
+    const settled = s.bets.filter((b) => b.result !== "Void" && b.result !== "Pending").length;
+    const wr = settled ? (s.wins / settled) * 100 : 0;
+    const avgOdd = s.oddsCount ? s.oddsSum / s.oddsCount : 0;
+    const avgStakeU = settled ? s.bets.filter(b => b.result !== "Void" && b.result !== "Pending").reduce((a, b) => a + Number(b.stakeU), 0) / settled : 0;
+    return (
+      <div key={name} style={{ background: "#111827", borderRadius: 12, padding: "12px 14px", border: "1px solid #1e293b" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>{name}</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: s.profitE >= 0 ? "#22c55e" : "#ef4444" }}>{fmt(s.profitE)}€</div>
+        </div>
+        <div style={{ height: 5, background: "#1e293b", borderRadius: 3, marginBottom: 8, overflow: "hidden" }}>
+          <div style={{ width: `${Math.abs(s.profitE / maxAbs) * 100}%`, height: "100%", background: s.profitE >= 0 ? "#22c55e" : "#ef4444", borderRadius: 3 }} />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, fontSize: 11, color: "#64748b" }}>
+          <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{s.bets.length}</div>Bets</div>
+          <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{s.wins}</div>Wins</div>
+          <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{fmtAbs(wr)}%</div>Win %</div>
+          <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{fmtAbs(s.totalInvE)}€</div>Invested</div>
+          <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{fmt(s.profitU)}u</div>Profit u</div>
+          <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{fmtAbs(avgOdd)}</div>Avg Odd</div>
+          <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{fmtAbs(avgStakeU)}u</div>Avg Stake</div>
+          <div><div style={{ color: "#94a3b8", fontWeight: 600 }}>{s.totalInvE ? fmt(s.profitE / s.totalInvE * 100) : "–"}%</div>ROI</div>
+        </div>
+      </div>
+    );
+  });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+      {/* GLOBAL KPIs */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
+        <KPI label="Bets" value={total.total} />
+        <KPI label="Wins" value={total.wins} color="#22c55e" />
+        <KPI label="Win %" value={fmtAbs(total.winRate) + "%"} color={total.winRate >= 50 ? "#22c55e" : "#ef4444"} />
+        <KPI label="Avg Odd" value={fmtAbs(total.avgOdd)} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+        <KPI label="Profit €" value={fmt(total.profitE) + "€"} color={total.profitE >= 0 ? "#22c55e" : "#ef4444"} large />
+        <KPI label="Profit u" value={fmt(total.profitU) + "u"} color={total.profitU >= 0 ? "#22c55e" : "#ef4444"} large />
+        <KPI label="ROI" value={fmt(total.roi) + "%"} color={total.roi >= 0 ? "#22c55e" : "#ef4444"} large />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <KPI label="Total Invested" value={fmtAbs(total.totalInvE) + "€"} />
+        <KPI label="Avg Stake" value={fmtAbs(total.avgStakeU) + "u"} />
+      </div>
+
+      {/* SUB-TABS */}
+      <div style={{ display: "flex", gap: 8, borderBottom: "1px solid #1e293b", paddingBottom: 12 }}>
+        {[["bk", "Bankroll"], ["sport", "By Sport"], ["league", "By League"]].map(([k, l]) => (
+          <button key={k} onClick={() => setStatsTab(k)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, color: statsTab === k ? "#38bdf8" : "#475569", borderBottom: statsTab === k ? "2px solid #38bdf8" : "2px solid transparent", paddingBottom: 4 }}>{l}</button>
+        ))}
+      </div>
+
+      {statsTab === "sport" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {renderGroup(bySport, maxProfitAbs)}
+          {Object.keys(bySport).length === 0 && <div style={{ color: "#475569", textAlign: "center", padding: 20 }}>No data</div>}
+        </div>
+      )}
+
+      {statsTab === "league" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {renderGroup(byLeague, Math.max(...Object.values(byLeague).map((s) => Math.abs(s.profitE)), 1))}
+          {Object.keys(byLeague).length === 0 && <div style={{ color: "#475569", textAlign: "center", padding: 20 }}>No data</div>}
+        </div>
+      )}
+
+      {statsTab === "bk" && (
+        <>
+          {/* CHART */}
+          <div style={{ background: "#111827", borderRadius: 12, padding: 14, border: "1px solid #1e293b" }}>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Bankroll Evolution</div>
+            <Sparkline data={bkChartData} />
+            {bkChartData.length > 0 && (
+              <div style={{ display: "flex", gap: 8, overflowX: "auto", marginTop: 10 }}>
+                {bkChartData.map((d) => (
+                  <div key={d.mk} style={{ textAlign: "center", flexShrink: 0, minWidth: 52 }}>
+                    <div style={{ fontSize: 10, color: "#64748b" }}>{d.label}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700 }}>{d.bk.toLocaleString()}€</div>
+                    <div style={{ fontSize: 10, color: d.profit >= 0 ? "#22c55e" : "#ef4444" }}>{fmt(d.profit)}€</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ADD MONTH BK BUTTON */}
+          <button onClick={() => {
+            const mk = monthKey(today());
+            openBkEdit(mk);
+          }} style={{ background: "#1e293b", border: "1px dashed #334155", borderRadius: 12, padding: "12px", color: "#38bdf8", fontSize: 14, cursor: "pointer", fontWeight: 600 }}>
+            + Setup current month bankroll
+          </button>
+
+          {/* MONTHLY BK */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {allMonths.map((mk) => {
+              const bk = bankroll[mk] ?? {};
+              const running = runningBalance(mk);
+              return (
+                <div key={mk} style={{ background: "#111827", borderRadius: 12, padding: "12px 14px", border: "1px solid #1e293b" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ fontWeight: 700 }}>{monthLabel(mk)}</div>
+                    <button onClick={() => openBkEdit(mk)} style={{ background: "#1e293b", border: "none", borderRadius: 8, padding: "4px 12px", color: "#38bdf8", fontSize: 12, cursor: "pointer" }}>Edit</button>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontSize: 12 }}>
+                    <div style={{ color: "#64748b" }}>Start: <b style={{ color: "#e2e8f0" }}>{bk.start ? bk.start.toLocaleString() + "€" : "–"}</b></div>
+                    <div style={{ color: "#64748b" }}>End: <b style={{ color: "#e2e8f0" }}>{bk.end ? bk.end.toLocaleString() + "€" : "–"}</b></div>
+                    <div style={{ color: "#64748b" }}>1u = <b style={{ color: "#38bdf8" }}>{bk.unitValue ? bk.unitValue + "€" : "–"}</b></div>
+                    <div style={{ color: "#64748b" }}>Fees: <b style={{ color: "#ef4444" }}>{bk.fees ? "-" + bk.fees + "€" : "–"}</b></div>
+                  </div>
+                  {running !== null && (
+                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ fontSize: 12, color: "#64748b" }}>Running Balance</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: bk.end ? (running >= bk.end ? "#22c55e" : "#f59e0b") : "#e2e8f0" }}>
+                        {running.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {/* Also show months with BK config but no bets yet */}
+            {Object.keys(bankroll).filter(mk => !allMonths.includes(mk)).map(mk => {
+              const bk = bankroll[mk] ?? {};
+              return (
+                <div key={mk} style={{ background: "#111827", borderRadius: 12, padding: "12px 14px", border: "1px solid #1e293b" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ fontWeight: 700 }}>{monthLabel(mk)}</div>
+                    <button onClick={() => openBkEdit(mk)} style={{ background: "#1e293b", border: "none", borderRadius: 8, padding: "4px 12px", color: "#38bdf8", fontSize: 12, cursor: "pointer" }}>Edit</button>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontSize: 12 }}>
+                    <div style={{ color: "#64748b" }}>Start: <b style={{ color: "#e2e8f0" }}>{bk.start ? bk.start.toLocaleString() + "€" : "–"}</b></div>
+                    <div style={{ color: "#64748b" }}>1u = <b style={{ color: "#38bdf8" }}>{bk.unitValue ? bk.unitValue + "€" : "–"}</b></div>
+                  </div>
+                </div>
+              );
+            })}
+            {allMonths.length === 0 && Object.keys(bankroll).length === 0 && (
+              <div style={{ color: "#475569", textAlign: "center", padding: 20 }}>No months yet — click "Setup current month" above</div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* BK EDIT MODAL */}
+      {bkEdit && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
+          <div style={{ background: "#1e293b", borderRadius: 16, padding: 24, margin: 20, border: "1px solid #334155", maxWidth: 340, width: "100%" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Bankroll — {monthLabel(bkEdit)}</div>
+            {[["start", "Starting bankroll (€)"], ["end", "End bankroll (€)"], ["unitValue", "1 unit = (€)"], ["fees", "Fees PS3838 (€)"]].map(([k, lbl]) => (
+              <div key={k} style={{ marginBottom: 12 }}>
+                <Input label={lbl} type="number" value={bkForm[k]} onChange={(e) => setBkForm((f) => ({ ...f, [k]: e.target.value }))} />
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+              <Btn onClick={() => setBkEdit(null)} flex={1}>Cancel</Btn>
+              <Btn onClick={saveBk} bg="#38bdf8" color="#0a0f1e" flex={1}>Save</Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
