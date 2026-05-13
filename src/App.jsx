@@ -323,15 +323,15 @@ export default function App() {
     if (editId !== null) {
       const f = valid[0];
       const stakeU = unitValue ? (Number(f.stakeE) / unitValue).toFixed(2) : f.stakeU;
-      const entry = { date: f.date, sport: f.sport, league: f.league, subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee), stakeu: Number(stakeU), result: f.result, note: f.note ?? "" };
+      const entry = { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "" };
       const { error } = await supabase.from("bets").update(entry).eq("id", editId);
       if (!error) setBets(bets.map((b) => (b.id === editId ? { ...entry, id: editId } : b)));
       else alert("Error saving: " + error.message);
       setEditId(null);
     } else {
-      const newEntries = valid.map(f => {
-        const stakeU = unitValue ? (Number(f.stakeE) / unitValue).toFixed(2) : f.stakeU;
-        return { date: f.date, sport: f.sport, league: f.league, subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee), stakeu: Number(stakeU), result: f.result, note: f.note ?? "" };
+      const newEntries = valid.map((f, i) => {
+        const stakeU = unitValue ? (Number(f.stakeE ?? f.stakee) / unitValue).toFixed(2) : (f.stakeU ?? f.stakeu ?? 1);
+        return { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "" };
       });
       const { data, error } = await supabase.from("bets").insert(newEntries).select();
       if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0) })), ...bets]);
@@ -341,7 +341,17 @@ export default function App() {
     setTab("list");
   };
 
-  const startEdit = (bet) => { setBatchForms([{ ...bet }]); setEditId(bet.id); setTab("add"); };
+  const startEdit = (bet) => {
+    setBatchForms([{
+      ...bet,
+      subCat: bet.subCat ?? bet.subcat ?? "",
+      stakeE: Number(bet.stakeE ?? bet.stakee ?? 0),
+      stakeU: Number(bet.stakeU ?? bet.stakeu ?? 0),
+      odd: Number(bet.odd ?? 0),
+    }]);
+    setEditId(bet.id);
+    setTab("add");
+  };
   
   const deleteBet = async (id) => {
     const { error } = await supabase.from("bets").delete().eq("id", id);
@@ -646,9 +656,18 @@ function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, s
         </button>
       )}
 
-      <button onClick={handleSaveAll} style={{ background: "#38bdf8", border: "none", borderRadius: 12, padding: "16px", color: "#0a0f1e", fontSize: 16, fontWeight: 800, cursor: "pointer", position: "sticky", bottom: 90 }}>
-        {editId ? "Update" : `Save ${validCount > 1 ? validCount + " bets" : "bet"}`}
-      </button>
+      <div style={{ display: "flex", gap: 10, position: "sticky", bottom: 90 }}>
+        {editId && (
+          <button onClick={() => { setEditId(null); setBatchForms([emptyBetForm()]); setTab("list"); }}
+            style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", borderRadius: 12, padding: "13px", color: "#94a3b8", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+            Cancel
+          </button>
+        )}
+        <button onClick={handleSaveAll}
+          style={{ flex: 2, background: "#38bdf8", border: "none", borderRadius: 12, padding: "13px", color: "#0a0f1e", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>
+          {editId ? "Update" : `Save ${validCount > 1 ? validCount + " bets" : "bet"}`}
+        </button>
+      </div>
     </div>
   );
 }
