@@ -543,7 +543,10 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
   const cfg = SPORTS_CONFIG[form.sport] ?? { leagues: [], subCats: [] };
   const hasLeague = cfg.leagues.length > 0;
   const hasSubCat = cfg.subCats.length > 0;
-  const computedU = unitValue ? (Number(form.stakeE) / unitValue).toFixed(2) : null;
+  const rawStakeE = Number(form.stakeE ?? form.stakee ?? 0);
+  const rawU = unitValue && rawStakeE > 0 ? (rawStakeE / unitValue) : null;
+  const computedU = rawU !== null && !isNaN(rawU) ? rawU.toFixed(2) : null;
+  const manualU = Number(form.stakeU ?? form.stakeu ?? 0);
 
   const set = (k, v) => {
     const next = { ...form, [k]: v };
@@ -606,7 +609,7 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
           <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Stake u</div>
           {computedU
             ? <div style={{ background: "#1e293b", border: "1px solid #38bdf833", borderRadius: 10, padding: "12px 14px", fontSize: 14, color: "#38bdf8", fontWeight: 700 }}>{computedU}u</div>
-            : <input type="number" step="0.25" value={form.stakeU} onChange={(e) => set("stakeU", e.target.value)}
+            : <input type="number" step="0.25" value={manualU || ""} onChange={(e) => set("stakeU", e.target.value)}
                 style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: "12px 14px", color: "#f8fafc", fontSize: 14, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" }} />
           }
         </div>
@@ -851,8 +854,8 @@ function BetCard({ bet, onEdit, onDelete }) {
           </div>
           <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.3, marginBottom: 5 }}>{bet.bet}</div>
           <div style={{ fontSize: 12, color: "#64748b", display: "flex", gap: 12 }}>
-            <span>@{Number(bet.odd).toFixed(3)}</span>
-            <span>{bet.stakeE}€ / {Number(bet.stakeU).toFixed(2)}u</span>
+            <span>@{Number(bet.odd ?? 0).toFixed(3)}</span>
+            <span>{Number(bet.stakeE ?? bet.stakee ?? 0).toFixed(0)}€ / {Number(bet.stakeU ?? bet.stakeu ?? 0).toFixed(2)}u</span>
           </div>
           {bet.note && <div style={{ fontSize: 12, color: "#64748b", marginTop: 4, fontStyle: "italic" }}>{bet.note}</div>}
         </div>
