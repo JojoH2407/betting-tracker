@@ -1030,7 +1030,7 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
 
       {/* SHARE CARD */}
       <button onClick={() => setShowShare(true)} style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 12, padding: "10px 14px", color: "#94a3b8", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%" }}>
-        📊 Share Monthly Summary
+        📊 {filterMonth === "all" ? "Share All Time Stats" : "Share Monthly Summary"}
       </button>
 
       {/* SUB-TABS */}
