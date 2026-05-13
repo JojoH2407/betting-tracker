@@ -374,12 +374,15 @@ export default function App() {
     const map = {};
     bets.forEach((b) => {
       const k = b[key] || "–";
-      if (!map[k]) map[k] = { bets: [], wins: 0, profitE: 0, profitU: 0, totalInvE: 0, oddsSum: 0, oddsCount: 0 };
+      if (!map[k]) map[k] = { bets: [], wins: 0, profitE: 0, profitU: 0, totalInvE: 0, totalInvU: 0, oddsSum: 0, oddsCount: 0 };
       const s = map[k];
       s.bets.push(b);
       if (b.result === "Win") { s.wins++; s.profitE += calcProfit(b, "E"); s.profitU += calcProfit(b, "U"); }
       else if (b.result === "Lose") { s.profitE += calcProfit(b, "E"); s.profitU += calcProfit(b, "U"); }
-      if (b.result !== "Void" && b.result !== "Pending") { s.totalInvE += Number(b.stakeE); }
+      if (b.result !== "Void" && b.result !== "Pending") {
+        s.totalInvE += Number(b.stakeE ?? b.stakee ?? 0);
+        s.totalInvU += Number(b.stakeU ?? b.stakeu ?? 0);
+      }
       if (b.odd) { s.oddsSum += Number(b.odd); s.oddsCount++; }
     });
     return map;
@@ -394,7 +397,10 @@ export default function App() {
       if (b.result !== "Void" && b.result !== "Pending") settled++;
       if (b.result === "Win") { wins++; profitE += calcProfit(b, "E"); profitU += calcProfit(b, "U"); }
       else if (b.result === "Lose") { profitE += calcProfit(b, "E"); profitU += calcProfit(b, "U"); }
-      if (b.result !== "Void" && b.result !== "Pending") { totalInvE += Number(b.stakeE); totalInvU += Number(b.stakeU); }
+      if (b.result !== "Void" && b.result !== "Pending") {
+        totalInvE += Number(b.stakeE ?? b.stakee ?? 0);
+        totalInvU += Number(b.stakeU ?? b.stakeu ?? 0);
+      }
       if (b.odd) { oddsSum += Number(b.odd); oddsCount++; }
     });
     return {
@@ -906,7 +912,7 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
     const settled = s.bets.filter((b) => b.result !== "Void" && b.result !== "Pending").length;
     const wr = settled ? (s.wins / settled) * 100 : 0;
     const avgOdd = s.oddsCount ? s.oddsSum / s.oddsCount : 0;
-    const avgStakeU = settled ? s.bets.filter(b => b.result !== "Void" && b.result !== "Pending").reduce((a, b) => a + Number(b.stakeU), 0) / settled : 0;
+    const avgStakeU = settled && s.totalInvU ? s.totalInvU / settled : 0;
     return (
       <div key={name} style={{ background: "#111827", borderRadius: 12, padding: "12px 14px", border: "1px solid #1e293b" }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
