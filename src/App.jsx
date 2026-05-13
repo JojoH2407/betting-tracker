@@ -301,7 +301,12 @@ export default function App() {
     const fetchBets = async () => {
       setLoading(true);
       const { data, error } = await supabase.from("bets").select("*").order("date", { ascending: false });
-      if (data) setBets(data);
+      if (data) setBets(data.map(b => ({
+        ...b,
+        subCat: b.subcat ?? "",
+        stakeE: Number(b.stakee ?? 0),
+        stakeU: Number(b.stakeu ?? 0),
+      })));
       if (error) console.error("Load error:", error);
       setLoading(false);
     };
@@ -318,7 +323,7 @@ export default function App() {
     if (editId !== null) {
       const f = valid[0];
       const stakeU = unitValue ? (Number(f.stakeE) / unitValue).toFixed(2) : f.stakeU;
-      const entry = { date: f.date, sport: f.sport, league: f.league, subCat: f.subCat, bet: f.bet, odd: Number(f.odd), stakeE: Number(f.stakeE), stakeU: Number(stakeU), result: f.result, note: f.note ?? "" };
+      const entry = { date: f.date, sport: f.sport, league: f.league, subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee), stakeu: Number(stakeU), result: f.result, note: f.note ?? "" };
       const { error } = await supabase.from("bets").update(entry).eq("id", editId);
       if (!error) setBets(bets.map((b) => (b.id === editId ? { ...entry, id: editId } : b)));
       else alert("Error saving: " + error.message);
@@ -326,10 +331,10 @@ export default function App() {
     } else {
       const newEntries = valid.map(f => {
         const stakeU = unitValue ? (Number(f.stakeE) / unitValue).toFixed(2) : f.stakeU;
-        return { date: f.date, sport: f.sport, league: f.league, subCat: f.subCat, bet: f.bet, odd: Number(f.odd), stakeE: Number(f.stakeE), stakeU: Number(stakeU), result: f.result, note: f.note ?? "" };
+        return { date: f.date, sport: f.sport, league: f.league, subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee), stakeu: Number(stakeU), result: f.result, note: f.note ?? "" };
       });
       const { data, error } = await supabase.from("bets").insert(newEntries).select();
-      if (data) setBets([...data, ...bets]);
+      if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0) })), ...bets]);
       else alert("Error saving: " + error.message);
     }
     setBatchForms([emptyBetForm()]);
@@ -412,12 +417,12 @@ export default function App() {
       // Strip client-side ids before insert
       const toInsert = imported.map(({ id, ...rest }) => ({
         date: rest.date, sport: rest.sport, league: rest.league ?? "",
-        subCat: rest.subCat ?? "", bet: rest.bet, odd: Number(rest.odd),
-        stakeE: Number(rest.stakeE), stakeU: Number(rest.stakeU),
+        subcat: rest.subCat ?? rest.subcat ?? "", bet: rest.bet, odd: Number(rest.odd),
+        stakee: Number(rest.stakeE ?? rest.stakee), stakeu: Number(rest.stakeU ?? rest.stakeu),
         result: rest.result || "", note: rest.note ?? "",
       }));
       const { data, error } = await supabase.from("bets").insert(toInsert).select();
-      if (data) { setBets([...data, ...bets]); alert(`✅ ${data.length} bets imported!`); }
+      if (data) { setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0) })), ...bets]); alert(`✅ ${data.length} bets imported!`); }
       else alert("Import error: " + error.message);
     };
     reader.readAsText(file);
