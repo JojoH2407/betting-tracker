@@ -6,6 +6,17 @@ const supabase = createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4Y3JjeGxvbXZycHZ4Y25uY3BoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MTYwMTgsImV4cCI6MjA5NDE5MjAxOH0.-vlciOBd-go4MBck7lX4DNp5-aS5v0J1QGu4H-end4g"
 );
 
+// ── RESPONSIVE ───────────────────────────────────────────────────────────────
+const useWindowWidth = () => {
+  const [width, setWidth] = useState(window.innerWidth);
+  useEffect(() => {
+    const handler = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return width;
+};
+
 // ── SPORTS CONFIG ─────────────────────────────────────────────────────────────
 const SPORTS_CONFIG = {
   Tennis: {
@@ -297,6 +308,7 @@ const exportXLSX = (bets) => {
 // ════════════════════════════════════════════════════════════════════════════════
 export default function App() {
   const [tab, setTab] = useState("add");
+  const [scrollToDate, setScrollToDate] = useState(null);
   const [statsTab, setStatsTab] = useState("bk");
   const [bets, setBets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -352,6 +364,8 @@ export default function App() {
       else alert("Error saving: " + error.message);
     }
     setBatchForms([emptyBetForm()]);
+    const targetDate = valid[0]?.date ?? today();
+    setScrollToDate(targetDate);
     setTab("list");
   };
 
@@ -500,6 +514,9 @@ export default function App() {
     e.target.value = "";
   };
 
+  const windowWidth = useWindowWidth();
+  const isDesktop = windowWidth >= 900;
+
   if (loading) return (
     <div style={{ height: "100vh", background: "#0a0f1e", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#38bdf8", fontFamily: "sans-serif", gap: 16 }}>
       <div style={{ fontSize: 32 }}>🎯</div>
@@ -508,20 +525,48 @@ export default function App() {
   );
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0f1e", color: "#e2e8f0", fontFamily: "'SF Pro Display', 'Helvetica Neue', sans-serif", maxWidth: 500, margin: "0 auto", paddingBottom: 90 }}>
+    <div style={{ minHeight: "100vh", background: "#0a0f1e", color: "#e2e8f0", fontFamily: "'SF Pro Display', 'Helvetica Neue', sans-serif", paddingBottom: isDesktop ? 0 : 90 }}>
 
       {/* HEADER */}
-      <div style={{ background: "#0f172a", padding: "18px 18px 14px", borderBottom: "1px solid #1e293b", position: "sticky", top: 0, zIndex: 10 }}>
-        <div style={{ fontSize: 10, letterSpacing: 3, color: "#38bdf8", textTransform: "uppercase", marginBottom: 2 }}>BET TRACKER</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#f8fafc", marginBottom: 10 }}>
-          {filterMonth === "all" ? "All Time" : monthLabel(filterMonth)}
-        </div>
-        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
-          <Pill label="All" active={filterMonth === "all"} onClick={() => setFilterMonth("all")} />
-          {allMonths.map((mk) => <Pill key={mk} label={monthLabel(mk)} active={filterMonth === mk} onClick={() => setFilterMonth(mk)} />)}
+      <div style={{ background: "#0f172a", padding: isDesktop ? "18px 32px 14px" : "18px 18px 14px", borderBottom: "1px solid #1e293b", position: "sticky", top: 0, zIndex: 10 }}>
+        <div style={{ maxWidth: isDesktop ? 1400 : "100%", margin: "0 auto" }}>
+          <div style={{ fontSize: 10, letterSpacing: 3, color: "#38bdf8", textTransform: "uppercase", marginBottom: 2 }}>JojoH Betting Tracker</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#f8fafc", marginBottom: 10 }}>
+            {filterMonth === "all" ? "All Time" : monthLabel(filterMonth)}
+          </div>
+          <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
+            <Pill label="All" active={filterMonth === "all"} onClick={() => setFilterMonth("all")} />
+            {allMonths.map((mk) => <Pill key={mk} label={monthLabel(mk)} active={filterMonth === mk} onClick={() => setFilterMonth(mk)} />)}
+          </div>
         </div>
       </div>
 
+      {isDesktop ? (
+        /* ── DESKTOP LAYOUT ── */
+        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 32px", display: "grid", gridTemplateColumns: "380px 1fr", gap: 24, alignItems: "start" }}>
+          {/* Left column: Add form */}
+          <div style={{ position: "sticky", top: 100 }}>
+            <AddTab batchForms={batchForms} setBatchForms={setBatchForms}
+              handleSaveAll={handleSaveAll} editId={editId} setEditId={setEditId}
+              setTab={setTab} emptyForm={emptyBetForm()} unitValue={unitValue} />
+          </div>
+          {/* Right column: tabs */}
+          <div>
+            <div style={{ display: "flex", gap: 12, marginBottom: 20, borderBottom: "1px solid #1e293b", paddingBottom: 12 }}>
+              {[["list","📋 Bets"], ["stats","📊 Stats"]].map(([k, l]) => (
+                <button key={k} onClick={() => setTab(k)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, fontWeight: 700, color: tab === k ? "#38bdf8" : "#475569", borderBottom: tab === k ? "2px solid #38bdf8" : "2px solid transparent", paddingBottom: 8 }}>{l}</button>
+              ))}
+            </div>
+            {tab !== "add" && (
+              <div>
+                {tab === "list" && <ListTab bets={filtered} onEdit={startEdit} onDelete={setDeleteConfirm} onExport={() => exportXLSX(bets)} onImport={handleCSVImport} filterMonth={filterMonth} scrollToDate={scrollToDate} onScrollDone={() => setScrollToDate(null)} onDeleteAll={() => { if (filterMonth === "all") { supabase.from("bets").delete().neq("id","00000000-0000-0000-0000-000000000000").then(() => setBets([])); } else { const ids = bets.filter(b => monthKey(b.date) === filterMonth).map(b => b.id); supabase.from("bets").delete().in("id", ids).then(() => setBets(bets.filter(b => monthKey(b.date) !== filterMonth))); }}} />}
+                {tab === "stats" && <StatsTab total={total} bySport={bySport} byLeague={byLeague} maxProfitAbs={maxProfitAbs} bkChartData={bkChartData} bankroll={bankroll} updateBankroll={updateBankroll} allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab} bets={bets} dailyChartData={dailyChartData} oddsRanges={oddsRanges} filterMonth={filterMonth} />}
+              </div>
+            )}
+            {tab === "add" && <div style={{ color: "#475569", textAlign: "center", padding: 40 }}>Filling form on the left →</div>}
+          </div>
+        </div>
+      ) : (
       <div style={{ padding: "16px 16px 0" }}>
         {tab === "add" && (
           <AddTab batchForms={batchForms} setBatchForms={setBatchForms}
@@ -554,8 +599,11 @@ export default function App() {
         )}
       </div>
 
-      {/* NAV */}
-      <nav style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 500, background: "#0f172a", borderTop: "1px solid #1e293b", display: "flex", justifyContent: "space-around", padding: "10px 0 24px", zIndex: 20 }}>
+      </div> {/* end mobile content div */}
+      )} {/* end isDesktop ternary */}
+
+      {/* NAV — mobile only */}
+      {!isDesktop && <nav style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 500, background: "#0f172a", borderTop: "1px solid #1e293b", display: "flex", justifyContent: "space-around", padding: "10px 0 24px", zIndex: 20 }}>
         {[
           { key: "add", label: editId ? "Edit" : "Add", icon: <Icons.Plus /> },
           { key: "list", label: "Bets", icon: <Icons.List /> },
@@ -565,7 +613,7 @@ export default function App() {
             {icon}{label}
           </button>
         ))}
-      </nav>
+      </nav>}
 
       {/* DELETE MODAL */}
       {deleteConfirm && (
@@ -762,7 +810,7 @@ function DayGroup({ date, bets, onEdit, onDelete, defaultOpen }) {
   const dateLabel = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }).toUpperCase();
 
   return (
-    <div>
+    <div id={`day-${date}`}>
       <button onClick={() => setOpen(o => !o)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", marginBottom: open ? 8 : 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 11, color: "#64748b", letterSpacing: 2, textTransform: "uppercase" }}>{dateLabel}</span>
@@ -818,30 +866,49 @@ function WeekGroup({ weekLabel, days, bets, onEdit, onDelete, defaultOpen }) {
   );
 }
 
-function ListTab({ bets, onEdit, onDelete, onExport, onImport, onDeleteAll, filterMonth }) {
+function ListTab({ bets, onEdit, onDelete, onExport, onImport, onDeleteAll, filterMonth, scrollToDate, onScrollDone }) {
   const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [sportFilter, setSportFilter] = useState("All");
   const [showFilters, setShowFilters] = useState(false);
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState("date"); // "date" | "sport"
+  const [sortBy, setSortBy] = useState("date");
+
+  useEffect(() => {
+    if (scrollToDate) {
+      setTimeout(() => {
+        const el = document.getElementById(`day-${scrollToDate}`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        onScrollDone?.();
+      }, 100);
+    }
+  }, [scrollToDate]); // "date" | "sport"
 
   const sports = ["All", ...Object.keys(SPORTS_CONFIG)];
   const filtered = bets
     .filter(b => sportFilter === "All" || b.sport === sportFilter)
     .filter(b => !search || b.bet?.toLowerCase().includes(search.toLowerCase()) || b.league?.toLowerCase().includes(search.toLowerCase()));
   
+  const resultOrder = { "Pending": 0, "Win": 1, "Lose": 1, "Void": 2 };
+
   const sorted = [...filtered].sort((a, b) => {
+    // Always: date desc first
+    const dateCmp = b.date.localeCompare(a.date);
+    if (dateCmp !== 0) return dateCmp;
+
     if (sortBy === "sport") {
       const sportCmp = a.sport.localeCompare(b.sport);
       if (sportCmp !== 0) return sportCmp;
-      // within same sport, newest first by created_at then date
-      const dateB = b.created_at ?? b.date;
-      const dateA = a.created_at ?? a.date;
-      return dateB.localeCompare(dateA);
     }
-    // default: by date desc, then created_at desc within same day
-    const dateCmp = b.date.localeCompare(a.date);
-    if (dateCmp !== 0) return dateCmp;
+
+    // Within same day (and sport if sportBy): Pending first, then settled
+    const resCmp = (resultOrder[a.result] ?? 1) - (resultOrder[b.result] ?? 1);
+    if (resCmp !== 0) return resCmp;
+
+    // Within same result group: sort by sport
+    const sportCmp = a.sport.localeCompare(b.sport);
+    if (sportCmp !== 0) return sportCmp;
+
+    // Finally by created_at
     const caB = b.created_at ?? "";
     const caA = a.created_at ?? "";
     return caB.localeCompare(caA);
