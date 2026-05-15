@@ -567,53 +567,52 @@ export default function App() {
           </div>
         </div>
       ) : (
-      <div style={{ padding: "16px 16px 0" }}>
-        {tab === "add" && (
-          <AddTab batchForms={batchForms} setBatchForms={setBatchForms}
-            handleSaveAll={handleSaveAll} editId={editId} setEditId={setEditId}
-            setTab={setTab} emptyForm={emptyBetForm()} unitValue={unitValue} />
-        )}
-        {tab === "list" && (
-          <ListTab bets={filtered} onEdit={startEdit} onDelete={setDeleteConfirm}
-            onExport={() => exportXLSX(bets)} onImport={handleCSVImport}
-            filterMonth={filterMonth}
-            onDeleteAll={async () => {
-              if (filterMonth === "all") {
-                const { error } = await supabase.from("bets").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-                if (!error) setBets([]);
-              } else {
-                const toDelete = bets.filter((b) => monthKey(b.date) === filterMonth);
-                const ids = toDelete.map(b => b.id);
-                const { error } = await supabase.from("bets").delete().in("id", ids);
-                if (!error) setBets(bets.filter((b) => monthKey(b.date) !== filterMonth));
-              }
-            }} />
-        )}
-        {tab === "stats" && (
-          <StatsTab total={total} bySport={bySport} byLeague={byLeague}
-            maxProfitAbs={maxProfitAbs} bkChartData={bkChartData}
-            bankroll={bankroll} updateBankroll={updateBankroll}
-            allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab}
-            bets={bets} dailyChartData={dailyChartData} oddsRanges={oddsRanges}
-            filterMonth={filterMonth} />
-        )}
-      </div>
-
-      </div>
+        <div style={{ padding: "16px 16px 0" }}>
+          {tab === "add" && (
+            <AddTab batchForms={batchForms} setBatchForms={setBatchForms}
+              handleSaveAll={handleSaveAll} editId={editId} setEditId={setEditId}
+              setTab={setTab} emptyForm={emptyBetForm()} unitValue={unitValue} />
+          )}
+          {tab === "list" && (
+            <ListTab bets={filtered} onEdit={startEdit} onDelete={setDeleteConfirm}
+              onExport={() => exportXLSX(bets)} onImport={handleCSVImport}
+              filterMonth={filterMonth}
+              scrollToDate={scrollToDate} onScrollDone={() => setScrollToDate(null)}
+              onDeleteAll={async () => {
+                if (filterMonth === "all") {
+                  const { error } = await supabase.from("bets").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+                  if (!error) setBets([]);
+                } else {
+                  const ids = bets.filter((b) => monthKey(b.date) === filterMonth).map(b => b.id);
+                  const { error } = await supabase.from("bets").delete().in("id", ids);
+                  if (!error) setBets(bets.filter((b) => monthKey(b.date) !== filterMonth));
+                }
+              }} />
+          )}
+          {tab === "stats" && (
+            <StatsTab total={total} bySport={bySport} byLeague={byLeague}
+              maxProfitAbs={maxProfitAbs} bkChartData={bkChartData}
+              bankroll={bankroll} updateBankroll={updateBankroll}
+              allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab}
+              bets={bets} dailyChartData={dailyChartData} oddsRanges={oddsRanges}
+              filterMonth={filterMonth} />
+          )}
+        </div>
       )}
 
-      {/* NAV — mobile only */}
-      {!isDesktop && <nav style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 500, background: "#0f172a", borderTop: "1px solid #1e293b", display: "flex", justifyContent: "space-around", padding: "10px 0 24px", zIndex: 20 }}>
-        {[
-          { key: "add", label: editId ? "Edit" : "Add", icon: <Icons.Plus /> },
-          { key: "list", label: "Bets", icon: <Icons.List /> },
-          { key: "stats", label: "Stats", icon: <Icons.Chart /> },
-        ].map(({ key, label, icon }) => (
-          <button key={key} onClick={() => setTab(key)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, color: tab === key ? "#38bdf8" : "#475569", fontSize: 11, fontWeight: 600, letterSpacing: 0.5 }}>
-            {icon}{label}
-          </button>
-        ))}
-      </nav>}
+      {!isDesktop && (
+        <nav style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 500, background: "#0f172a", borderTop: "1px solid #1e293b", display: "flex", justifyContent: "space-around", padding: "10px 0 24px", zIndex: 20 }}>
+          {[
+            { key: "add", label: editId ? "Edit" : "Add", icon: <Icons.Plus /> },
+            { key: "list", label: "Bets", icon: <Icons.List /> },
+            { key: "stats", label: "Stats", icon: <Icons.Chart /> },
+          ].map(({ key, label, icon }) => (
+            <button key={key} onClick={() => setTab(key)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, color: tab === key ? "#38bdf8" : "#475569", fontSize: 11, fontWeight: 600, letterSpacing: 0.5 }}>
+              {icon}{label}
+            </button>
+          ))}
+        </nav>
+      )}
 
       {/* DELETE MODAL */}
       {deleteConfirm && (
