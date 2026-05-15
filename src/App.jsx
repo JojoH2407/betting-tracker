@@ -599,8 +599,8 @@ export default function App() {
         )}
       </div>
 
-      </div> {/* end mobile content div */}
-      )} {/* end isDesktop ternary */}
+      </div>
+      )}
 
       {/* NAV — mobile only */}
       {!isDesktop && <nav style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 500, background: "#0f172a", borderTop: "1px solid #1e293b", display: "flex", justifyContent: "space-around", padding: "10px 0 24px", zIndex: 20 }}>
