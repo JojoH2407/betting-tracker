@@ -544,11 +544,17 @@ export default function App() {
       {isDesktop ? (
         /* ── DESKTOP LAYOUT ── */
         <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 32px", display: "grid", gridTemplateColumns: "380px 1fr", gap: 24, alignItems: "start" }}>
-          {/* Left column: Add form */}
-          <div style={{ position: "sticky", top: 100 }}>
-            <AddTab batchForms={batchForms} setBatchForms={setBatchForms}
-              handleSaveAll={handleSaveAll} editId={editId} setEditId={setEditId}
-              setTab={setTab} emptyForm={emptyBetForm()} unitValue={unitValue} />
+          {/* Left column: Add form — fixed height, invisible scroll */}
+          <div style={{ position: "sticky", top: 90, height: "calc(100vh - 110px)", display: "flex", flexDirection: "column" }}>
+            <div style={{ flex: 1, overflowY: "auto", paddingRight: 4, scrollbarWidth: "none", msOverflowStyle: "none" }}>
+              <style>{".hide-scroll::-webkit-scrollbar { display: none; }"}</style>
+              <div className="hide-scroll" style={{ paddingBottom: 8 }}>
+                <AddTab batchForms={batchForms} setBatchForms={setBatchForms}
+                  handleSaveAll={handleSaveAll} editId={editId} setEditId={setEditId}
+                  setTab={setTab} emptyForm={emptyBetForm()} unitValue={unitValue}
+                  isDesktop={true} />
+              </div>
+            </div>
           </div>
           {/* Right column: tabs */}
           <div>
@@ -738,7 +744,7 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
   );
 }
 
-function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, setTab, emptyForm, unitValue }) {
+function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, setTab, emptyForm, unitValue, isDesktop }) {
   const addForm = () => {
     const last = batchForms[batchForms.length - 1];
     setBatchForms([...batchForms, emptyBetForm({ date: last.date, sport: last.sport, league: last.league, subCat: last.subCat, stakeE: last.stakeE, stakeU: last.stakeU })]);
@@ -768,16 +774,16 @@ function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, s
         </button>
       )}
 
-      <div style={{ display: "flex", gap: 10, position: "sticky", bottom: 90 }}>
+      <div style={{ display: "flex", gap: 10, marginTop: 8, position: isDesktop ? "relative" : "sticky", bottom: isDesktop ? "auto" : 90 }}>
         {editId && (
           <button onClick={() => { setEditId(null); setBatchForms([emptyBetForm()]); setTab("list"); }}
-            style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", borderRadius: 12, padding: "13px", color: "#94a3b8", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+            style={{ flex: 1, background: "transparent", border: "1px solid #334155", borderRadius: 12, padding: "12px", color: "#64748b", fontSize: 14, fontWeight: 600, cursor: "pointer", letterSpacing: 0.3 }}>
             Cancel
           </button>
         )}
         <button onClick={handleSaveAll}
-          style={{ flex: 2, background: "#38bdf8", border: "none", borderRadius: 12, padding: "13px", color: "#0a0f1e", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>
-          {editId ? "Update" : `Save ${validCount > 1 ? validCount + " bets" : "bet"}`}
+          style={{ flex: 2, background: "linear-gradient(135deg, #38bdf8, #818cf8)", border: "none", borderRadius: 12, padding: "13px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", letterSpacing: 0.5, boxShadow: "0 4px 15px rgba(56,189,248,0.3)" }}>
+          {editId ? "✓ Update" : validCount > 1 ? `✓ Save ${validCount} bets` : "✓ Save bet"}
         </button>
       </div>
     </div>
