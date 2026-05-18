@@ -20,24 +20,24 @@ const useWindowWidth = () => {
 // ── SPORTS CONFIG ─────────────────────────────────────────────────────────────
 const SPORTS_CONFIG = {
   Tennis: {
-    leagues: ["ATP", "WTA"],
+    leagues: ["ATP", "WTA", "Outright"],
     subCats: ["ML", "AH", "O/U", "Parlay"],
   },
   Baseball: {
-    leagues: ["MLB", "KBO"],
+    leagues: ["MLB", "KBO", "Outright"],
     subCats: ["ML", "AH", "O/U", "HR", "Total Bases", "Parlay"],
   },
   Football: {
-    leagues: ["Ligue 1", "BPL", "Liga", "Serie A", "Bundesliga", "LDC", "CDM", "National Cup", "Exotique"],
+    leagues: ["Ligue 1", "BPL", "Liga", "Serie A", "Bundesliga", "LDC", "CDM", "National Cup", "Outright", "Exotique"],
     subCats: ["ML", "AH", "O/U", "BTTS", "Parlay"],
   },
   Basketball: {
-    leagues: ["NBA", "EuroLeague", "Autre"],
-    subCats: ["ML", "AH", "O/U", "Parlay"],
+    leagues: ["NBA", "EuroLeague", "Outright", "Autre"],
+    subCats: ["ML", "AH", "O/U", "Outright", "Parlay"],
   },
-  eSport: { leagues: [], subCats: [] },
-  "F1": { leagues: [], subCats: [] },
-  Cycling: { leagues: [], subCats: [] },
+  eSport: { leagues: ["Outright"], subCats: ["ML"] },
+  "F1": { leagues: ["Outright"], subCats: [] },
+  Cycling: { leagues: ["Outright"], subCats: [] },
 };
 
 const SPORTS = Object.keys(SPORTS_CONFIG);
@@ -399,7 +399,7 @@ export default function App() {
   const groupStats = (bets, key) => {
     const map = {};
     bets.forEach((b) => {
-      const k = b[key] || "–";
+      const k = key === "league" ? (b.league || b.sport || "–") : (b[key] || "–");
       if (!map[k]) map[k] = { bets: [], wins: 0, profitE: 0, profitU: 0, totalInvE: 0, totalInvU: 0, oddsSum: 0, oddsCount: 0 };
       const s = map[k];
       s.bets.push(b);
@@ -793,16 +793,20 @@ function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, s
 // LIST TAB
 // ════════════════════════════════════════════════════════════════════════════════
 
-const getWeekNumber = (dateStr) => {
+const getISOWeek = (dateStr) => {
   const d = new Date(dateStr + "T12:00:00");
-  const startOfYear = new Date(d.getFullYear(), 0, 1);
-  const diff = d - startOfYear + (startOfYear.getTimezoneOffset() - d.getTimezoneOffset()) * 60000;
-  return Math.ceil((diff / 86400000 + startOfYear.getDay() + 1) / 7);
+  // ISO 8601: week starts Monday, week 1 = week containing first Thursday
+  const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayOfWeek = tmp.getUTCDay() || 7; // Mon=1 ... Sun=7
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - dayOfWeek); // nearest Thursday
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
+  return { week: weekNo, year: tmp.getUTCFullYear() };
 };
 
 const weekKey = (dateStr) => {
-  const d = new Date(dateStr + "T12:00:00");
-  return `${d.getFullYear()}-W${String(getWeekNumber(dateStr)).padStart(2, "0")}`;
+  const { week, year } = getISOWeek(dateStr);
+  return `${year}-W${String(week).padStart(2, "0")}`;
 };
 
 function DayGroup({ date, bets, onEdit, onDelete, defaultOpen }) {
@@ -935,7 +939,7 @@ function ListTab({ bets, onEdit, onDelete, onExport, onImport, onDeleteAll, filt
   const weekLabel = (wk) => {
     if (sortBy === "sport") return wk;
     const [year, wNum] = wk.split("-W");
-    return `Week ${parseInt(wNum)} · ${year}`;
+    return `W${parseInt(wNum)} · ${year}`;
   };
 
   return (
