@@ -369,6 +369,12 @@ export default function App() {
     setTab("list");
   };
 
+  const handleUpdateResult = async (bet, result) => {
+    const { error } = await supabase.from("bets").update({ result }).eq("id", bet.id);
+    if (!error) setBets(bets.map(b => b.id === bet.id ? { ...b, result } : b));
+    else alert("Error: " + error.message);
+  };
+
   const startEdit = (bet) => {
     setBatchForms([{
       ...bet,
@@ -565,7 +571,7 @@ export default function App() {
             </div>
             {tab !== "add" && (
               <div>
-                {tab === "list" && <ListTab bets={filtered} onEdit={startEdit} onDelete={setDeleteConfirm} onExport={() => exportXLSX(bets)} onImport={handleCSVImport} filterMonth={filterMonth} scrollToDate={scrollToDate} onScrollDone={() => setScrollToDate(null)} onDeleteAll={() => { if (filterMonth === "all") { supabase.from("bets").delete().neq("id","00000000-0000-0000-0000-000000000000").then(() => setBets([])); } else { const ids = bets.filter(b => monthKey(b.date) === filterMonth).map(b => b.id); supabase.from("bets").delete().in("id", ids).then(() => setBets(bets.filter(b => monthKey(b.date) !== filterMonth))); }}} />}
+                {tab === "list" && <ListTab bets={filtered} onEdit={startEdit} onDelete={setDeleteConfirm} onUpdateResult={handleUpdateResult} onExport={() => exportXLSX(bets)} onImport={handleCSVImport} filterMonth={filterMonth} scrollToDate={scrollToDate} onScrollDone={() => setScrollToDate(null)} onDeleteAll={() => { if (filterMonth === "all") { supabase.from("bets").delete().neq("id","00000000-0000-0000-0000-000000000000").then(() => setBets([])); } else { const ids = bets.filter(b => monthKey(b.date) === filterMonth).map(b => b.id); supabase.from("bets").delete().in("id", ids).then(() => setBets(bets.filter(b => monthKey(b.date) !== filterMonth))); }}} />}
                 {tab === "stats" && <StatsTab total={total} bySport={bySport} byLeague={byLeague} maxProfitAbs={maxProfitAbs} bkChartData={bkChartData} bankroll={bankroll} updateBankroll={updateBankroll} allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab} bets={bets} dailyChartData={dailyChartData} oddsRanges={oddsRanges} filterMonth={filterMonth} />}
               </div>
             )}
@@ -581,6 +587,7 @@ export default function App() {
           )}
           {tab === "list" && (
             <ListTab bets={filtered} onEdit={startEdit} onDelete={setDeleteConfirm}
+              onUpdateResult={handleUpdateResult}
               onExport={() => exportXLSX(bets)} onImport={handleCSVImport}
               filterMonth={filterMonth}
               scrollToDate={scrollToDate} onScrollDone={() => setScrollToDate(null)}
@@ -809,7 +816,7 @@ const weekKey = (dateStr) => {
   return `${year}-W${String(week).padStart(2, "0")}`;
 };
 
-function DayGroup({ date, bets, onEdit, onDelete, defaultOpen }) {
+function DayGroup({ date, bets, onEdit, onDelete, onUpdateResult, defaultOpen }) {
   const [open, setOpen] = useState(defaultOpen ?? true);
   const profitE = bets.reduce((a, b) => a + calcProfit(b, "E"), 0);
   const profitU = bets.reduce((a, b) => a + calcProfit(b, "U"), 0);
@@ -835,14 +842,14 @@ function DayGroup({ date, bets, onEdit, onDelete, defaultOpen }) {
       </button>
       {open && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 4 }}>
-          {bets.map((b) => <BetCard key={b.id} bet={b} onEdit={onEdit} onDelete={onDelete} />)}
+          {bets.map((b) => <BetCard key={b.id} bet={b} onEdit={onEdit} onDelete={onDelete} onUpdateResult={onUpdateResult} />)}
         </div>
       )}
     </div>
   );
 }
 
-function WeekGroup({ weekLabel, days, bets, onEdit, onDelete, defaultOpen }) {
+function WeekGroup({ weekLabel, days, bets, onEdit, onDelete, onUpdateResult, defaultOpen }) {
   const [open, setOpen] = useState(defaultOpen ?? true);
   const profitE = bets.reduce((a, b) => a + calcProfit(b, "E"), 0);
   const profitU = bets.reduce((a, b) => a + calcProfit(b, "U"), 0);
@@ -867,7 +874,7 @@ function WeekGroup({ weekLabel, days, bets, onEdit, onDelete, defaultOpen }) {
       {open && (
         <div style={{ padding: "0 12px 12px" }}>
           {days.map(date => (
-            <DayGroup key={date} date={date} bets={bets.filter(b => b.date === date)} onEdit={onEdit} onDelete={onDelete} defaultOpen={true} />
+            <DayGroup key={date} date={date} bets={bets.filter(b => b.date === date)} onEdit={onEdit} onDelete={onDelete} onUpdateResult={onUpdateResult} defaultOpen={true} />
           ))}
         </div>
       )}
@@ -875,7 +882,7 @@ function WeekGroup({ weekLabel, days, bets, onEdit, onDelete, defaultOpen }) {
   );
 }
 
-function ListTab({ bets, onEdit, onDelete, onExport, onImport, onDeleteAll, filterMonth, scrollToDate, onScrollDone }) {
+function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, onDeleteAll, filterMonth, scrollToDate, onScrollDone }) {
   const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [sportFilter, setSportFilter] = useState("All");
   const [showFilters, setShowFilters] = useState(false);
@@ -1016,14 +1023,14 @@ function ListTab({ bets, onEdit, onDelete, onExport, onImport, onDeleteAll, filt
       {weekEntries.map(([wk, { bets: wBets, dates }]) => {
         const sortedDates = [...dates].sort((a, b) => b.localeCompare(a));
         return (
-          <WeekGroup key={wk} weekLabel={weekLabel(wk)} days={sortedDates} bets={wBets} onEdit={onEdit} onDelete={onDelete} defaultOpen={true} />
+          <WeekGroup key={wk} weekLabel={weekLabel(wk)} days={sortedDates} bets={wBets} onEdit={onEdit} onDelete={onDelete} onUpdateResult={onUpdateResult} defaultOpen={true} />
         );
       })}
     </div>
   );
 }
 
-function BetCard({ bet, onEdit, onDelete }) {
+function BetCard({ bet, onEdit, onDelete, onUpdateResult }) {
   const profitE = calcProfit(bet, "E");
   return (
     <div style={{ background: "#111827", borderRadius: 12, padding: "12px 14px", border: `1px solid ${RESULT_COLORS[bet.result]}33` }}>
@@ -1041,6 +1048,21 @@ function BetCard({ bet, onEdit, onDelete }) {
             <span>{Number(bet.stakeE ?? bet.stakee ?? 0).toFixed(0)}€ / {Number(bet.stakeU ?? bet.stakeu ?? 0).toFixed(2)}u</span>
           </div>
           {bet.note && <div style={{ fontSize: 12, color: "#64748b", marginTop: 4, fontStyle: "italic" }}>{bet.note}</div>}
+          {/* Quick result buttons — only show if Pending */}
+          {bet.result === "Pending" && (
+            <div style={{ display: "flex", gap: 5, marginTop: 8 }}>
+              {["Win", "Lose", "Void"].map(r => (
+                <button key={r} onClick={() => onUpdateResult(bet, r)} style={{
+                  background: RESULT_COLORS[r] + "18",
+                  border: `1px solid ${RESULT_COLORS[r]}55`,
+                  color: RESULT_COLORS[r],
+                  borderRadius: 8, padding: "3px 10px",
+                  fontSize: 11, fontWeight: 700, cursor: "pointer",
+                  letterSpacing: 0.3,
+                }}>{r}</button>
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
           {bet.result !== "Pending" && bet.result !== "Void" && (
