@@ -320,6 +320,7 @@ const exportXLSX = (bets) => {
 export default function App() {
   const [tab, setTab] = useState("add");
   const [scrollToDate, setScrollToDate] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [statsTab, setStatsTab] = useState("bk");
   const [bets, setBets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -354,7 +355,6 @@ export default function App() {
   const currentMonthBK = bankroll[monthKey(batchForms[0]?.date ?? today())];
   const unitValue = currentMonthBK?.unitValue ?? null;
 
-  const [saving, setSaving] = useState(false);
   const handleSaveAll = async () => {
     if (saving) return;
     const valid = batchForms.filter(f => f.bet && f.odd);
