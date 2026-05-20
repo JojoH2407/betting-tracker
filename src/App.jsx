@@ -573,7 +573,7 @@ export default function App() {
                 <AddTab batchForms={batchForms} setBatchForms={setBatchForms}
                   handleSaveAll={handleSaveAll} editId={editId} setEditId={setEditId}
                   setTab={setTab} emptyForm={emptyBetForm()} unitValue={unitValue}
-                  isDesktop={true} />
+                  isDesktop={true} saving={saving} />
               </div>
             </div>
           </div>
@@ -598,7 +598,8 @@ export default function App() {
           {tab === "add" && (
             <AddTab batchForms={batchForms} setBatchForms={setBatchForms}
               handleSaveAll={handleSaveAll} editId={editId} setEditId={setEditId}
-              setTab={setTab} emptyForm={emptyBetForm()} unitValue={unitValue} />
+              setTab={setTab} emptyForm={emptyBetForm()} unitValue={unitValue}
+              saving={saving} />
           )}
           {tab === "list" && (
             <ListTab bets={filtered} onEdit={startEdit} onDelete={setDeleteConfirm}
@@ -766,7 +767,7 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
   );
 }
 
-function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, setTab, emptyForm, unitValue, isDesktop }) {
+function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, setTab, emptyForm, unitValue, isDesktop, saving }) {
   const addForm = () => {
     const last = batchForms[batchForms.length - 1];
     setBatchForms([...batchForms, emptyBetForm({ date: last.date, sport: last.sport, league: last.league, subCat: last.subCat, stakeE: last.stakeE, stakeU: last.stakeU })]);
