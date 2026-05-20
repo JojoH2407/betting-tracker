@@ -55,7 +55,10 @@ const fmt = (n, d = 2) =>
   n == null || isNaN(n) ? "–" : (n >= 0 ? "+" : "") + Number(n).toFixed(d);
 const fmtAbs = (n, d = 2) =>
   n == null || isNaN(n) ? "–" : Number(n).toFixed(d);
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+};
 const monthKey = (d) => d?.slice(0, 7) ?? "";
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const monthLabel = (k) => {
@@ -281,20 +284,28 @@ const exportXLSX = (bets) => {
   script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
   script.onload = () => {
     const XLSX = window.XLSX;
-    const rows = bets.map((b) => ({
-      Date: b.date,
-      Sport: b.sport,
-      League: b.league,
-      "Sub-cat": b.subCat,
-      Bet: b.bet,
-      Odd: Number(b.odd),
-      "Stake (€)": Number(b.stakeE),
-      "Stake (u)": Number(b.stakeU),
-      Result: b.result,
-      "Profit (€)": calcProfit(b, "E"),
-      "Profit (u)": calcProfit(b, "U"),
-      Note: b.note ?? "",
-    }));
+    const pn = (v) => Number(String(v ?? 0).replace(",", ".")) || 0;
+    const rows = bets.map((b) => {
+      const odd = pn(b.odd);
+      const stakeE = pn(b.stakeE ?? b.stakee);
+      const stakeU = pn(b.stakeU ?? b.stakeu);
+      const profitE = b.result === "Win" ? (odd - 1) * stakeE : b.result === "Lose" ? -stakeE : 0;
+      const profitU = b.result === "Win" ? (odd - 1) * stakeU : b.result === "Lose" ? -stakeU : 0;
+      return {
+        Date: b.date,
+        Sport: b.sport,
+        League: b.league ?? "",
+        "Sub-cat": b.subCat ?? b.subcat ?? "",
+        Bet: b.bet,
+        Odd: odd,
+        "Stake (€)": stakeE,
+        "Stake (u)": stakeU,
+        Result: b.result,
+        "Profit (€)": stakeE > 0 ? profitE : "",
+        "Profit (u)": stakeU > 0 ? profitU : "",
+        Note: b.note ?? "",
+      };
+    });
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Bets");
@@ -343,9 +354,12 @@ export default function App() {
   const currentMonthBK = bankroll[monthKey(batchForms[0]?.date ?? today())];
   const unitValue = currentMonthBK?.unitValue ?? null;
 
+  const [saving, setSaving] = useState(false);
   const handleSaveAll = async () => {
+    if (saving) return;
     const valid = batchForms.filter(f => f.bet && f.odd);
     if (!valid.length) return;
+    setSaving(true);
     if (editId !== null) {
       const f = valid[0];
       const stakeU = unitValue ? (Number(f.stakeE) / unitValue).toFixed(2) : f.stakeU;
@@ -367,6 +381,7 @@ export default function App() {
     const targetDate = valid[0]?.date ?? today();
     setScrollToDate(targetDate);
     setTab("list");
+    setSaving(false);
   };
 
   const handleUpdateResult = async (bet, result) => {
@@ -649,14 +664,14 @@ export default function App() {
 // ════════════════════════════════════════════════════════════════════════════════
 
 const emptyBetForm = (base = {}) => ({
-  date: base.date ?? new Date().toISOString().slice(0, 10),
+  date: base.date ?? today(),
   sport: base.sport ?? "Tennis",
   league: base.league ?? "ATP",
   subCat: base.subCat ?? "ML",
   bet: "",
   odd: "",
   stakeE: base.stakeE ?? 60,
-  stakeU: base.stakeU ?? 1,
+  stakeU: base.stakeU ?? "",
   result: "Pending",
   note: "",
 });
@@ -668,7 +683,7 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
   const rawStakeE = Number(form.stakeE ?? form.stakee ?? 0);
   const rawU = unitValue && rawStakeE > 0 ? (rawStakeE / unitValue) : null;
   const computedU = rawU !== null && !isNaN(rawU) ? rawU.toFixed(2) : null;
-  const manualU = Number(form.stakeU ?? form.stakeu ?? 0);
+  const manualU = form.stakeU ?? form.stakeu ?? "";
 
   const set = (k, v) => {
     const next = { ...form, [k]: v };
@@ -731,7 +746,7 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
           <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Stake u</div>
           {computedU
             ? <div style={{ background: "#1e293b", border: "1px solid #38bdf833", borderRadius: 10, padding: "12px 14px", fontSize: 14, color: "#38bdf8", fontWeight: 700 }}>{computedU}u</div>
-            : <input type="number" step="0.25" value={manualU || ""} onChange={(e) => set("stakeU", e.target.value)}
+            : <input type="number" step="0.25" value={manualU} onChange={(e) => set("stakeU", e.target.value)}
                 style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: "12px 14px", color: "#f8fafc", fontSize: 14, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" }} />
           }
         </div>
@@ -790,7 +805,7 @@ function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, s
         )}
         <button onClick={handleSaveAll}
           style={{ flex: 2, background: "linear-gradient(135deg, #38bdf8, #818cf8)", border: "none", borderRadius: 12, padding: "13px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", letterSpacing: 0.5, boxShadow: "0 4px 15px rgba(56,189,248,0.3)" }}>
-          {editId ? "✓ Update" : validCount > 1 ? `✓ Save ${validCount} bets` : "✓ Save bet"}
+          {saving ? "Saving..." : editId ? "✓ Update" : validCount > 1 ? `✓ Save ${validCount} bets` : "✓ Save bet"}
         </button>
       </div>
     </div>
@@ -817,7 +832,8 @@ const weekKey = (dateStr) => {
 };
 
 function DayGroup({ date, bets, onEdit, onDelete, onUpdateResult, defaultOpen }) {
-  const [open, setOpen] = useState(defaultOpen ?? true);
+  const isToday = date >= today();
+  const [open, setOpen] = useState(defaultOpen ?? isToday);
   const profitE = bets.reduce((a, b) => a + calcProfit(b, "E"), 0);
   const profitU = bets.reduce((a, b) => a + calcProfit(b, "U"), 0);
   const settled = bets.filter(b => b.result !== "Pending" && b.result !== "Void");
@@ -850,7 +866,9 @@ function DayGroup({ date, bets, onEdit, onDelete, onUpdateResult, defaultOpen })
 }
 
 function WeekGroup({ weekLabel, days, bets, onEdit, onDelete, onUpdateResult, defaultOpen }) {
-  const [open, setOpen] = useState(defaultOpen ?? true);
+  const currentWeek = weekKey(today());
+  const isCurrentOrFutureWeek = weekLabel >= currentWeek || days.some(d => d >= today());
+  const [open, setOpen] = useState(defaultOpen ?? isCurrentOrFutureWeek);
   const profitE = bets.reduce((a, b) => a + calcProfit(b, "E"), 0);
   const profitU = bets.reduce((a, b) => a + calcProfit(b, "U"), 0);
   const settled = bets.filter(b => b.result !== "Pending" && b.result !== "Void");
@@ -874,7 +892,7 @@ function WeekGroup({ weekLabel, days, bets, onEdit, onDelete, onUpdateResult, de
       {open && (
         <div style={{ padding: "0 12px 12px" }}>
           {days.map(date => (
-            <DayGroup key={date} date={date} bets={bets.filter(b => b.date === date)} onEdit={onEdit} onDelete={onDelete} onUpdateResult={onUpdateResult} defaultOpen={true} />
+            <DayGroup key={date} date={date} bets={bets.filter(b => b.date === date)} onEdit={onEdit} onDelete={onDelete} onUpdateResult={onUpdateResult} />
           ))}
         </div>
       )}
@@ -1023,7 +1041,7 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
       {weekEntries.map(([wk, { bets: wBets, dates }]) => {
         const sortedDates = [...dates].sort((a, b) => b.localeCompare(a));
         return (
-          <WeekGroup key={wk} weekLabel={weekLabel(wk)} days={sortedDates} bets={wBets} onEdit={onEdit} onDelete={onDelete} onUpdateResult={onUpdateResult} defaultOpen={true} />
+          <WeekGroup key={wk} weekLabel={weekLabel(wk)} days={sortedDates} bets={wBets} onEdit={onEdit} onDelete={onDelete} onUpdateResult={onUpdateResult} />
         );
       })}
     </div>
