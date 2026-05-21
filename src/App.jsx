@@ -21,19 +21,19 @@ const useWindowWidth = () => {
 const SPORTS_CONFIG = {
   Tennis: {
     leagues: ["ATP", "WTA", "Outright"],
-    subCats: ["ML", "AH", "O/U", "Parlay"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Parlay"],
   },
   Baseball: {
     leagues: ["MLB", "KBO", "Outright"],
-    subCats: ["ML", "AH", "O/U", "HR", "Total Bases", "Parlay"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Parlay"],
   },
   Football: {
     leagues: ["Ligue 1", "BPL", "Liga", "Serie A", "Bundesliga", "LDC", "CDM", "National Cup", "Outright", "Exotique"],
-    subCats: ["ML", "AH", "O/U", "BTTS", "Parlay"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Parlay"],
   },
   Basketball: {
     leagues: ["NBA", "EuroLeague", "Outright", "Autre"],
-    subCats: ["ML", "AH", "O/U", "Outright", "Parlay"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Outright", "Parlay"],
   },
   eSport: { leagues: ["Outright"], subCats: ["ML"] },
   "F1": { leagues: ["Outright"], subCats: [] },
