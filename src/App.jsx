@@ -328,7 +328,7 @@ export default function App() {
   const [statsTab, setStatsTab] = useState("bk");
   const [bets, setBets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [bankroll, setBankrollState] = useState(() => load("bankroll_v2", {}));
+  const [bankroll, setBankrollState] = useState({});
   const [editId, setEditId] = useState(null);
   const [filterMonth, setFilterMonth] = useState("all");
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -336,23 +336,37 @@ export default function App() {
   const [batchForms, setBatchForms] = useState([emptyBetForm()]);
 
   const updateBets = (next) => { setBets(next); };
-  const updateBankroll = (next) => { setBankrollState(next); save("bankroll_v2", next); };
+  const updateBankroll = async (next) => {
+    setBankrollState(next);
+    save("bankroll_v2", next); // keep local backup
+    await supabase.from("settings").upsert({ key: "bankroll", value: JSON.stringify(next) }, { onConflict: "key" });
+  };
 
   // ── Supabase: load bets on mount ──────────────────────────────────────────
   useEffect(() => {
-    const fetchBets = async () => {
+    const fetchAll = async () => {
       setLoading(true);
-      const { data, error } = await supabase.from("bets").select("*").order("date", { ascending: false });
-      if (data) setBets(data.map(b => ({
+      // Load bets
+      const { data: betsData, error: betsError } = await supabase.from("bets").select("*").order("date", { ascending: false });
+      if (betsData) setBets(betsData.map(b => ({
         ...b,
         subCat: b.subcat ?? "",
         stakeE: Number(b.stakee ?? 0),
         stakeU: Number(b.stakeu ?? 0),
       })));
-      if (error) console.error("Load error:", error);
+      if (betsError) console.error("Bets load error:", betsError);
+      // Load bankroll from Supabase settings table
+      const { data: settingsData } = await supabase.from("settings").select("value").eq("key", "bankroll").single();
+      if (settingsData?.value) {
+        try { setBankrollState(JSON.parse(settingsData.value)); } catch {}
+      } else {
+        // Fallback to localStorage for migration
+        const local = load("bankroll_v2", {});
+        if (Object.keys(local).length > 0) setBankrollState(local);
+      }
       setLoading(false);
     };
-    fetchBets();
+    fetchAll();
   }, []);
 
   // unit value from the date of the first form
@@ -464,14 +478,26 @@ export default function App() {
     };
   }, [filtered]);
 
-  const bkChartData = useMemo(() =>
-    allMonths.map((mk) => {
+  const bkChartData = useMemo(() => {
+    const months = [...new Set([...allMonths, ...Object.keys(bankroll)])].sort();
+    const points = [];
+    months.forEach((mk) => {
       const bkEntry = bankroll[mk] ?? {};
-      const bkVal = bkEntry.end ?? 0;
       const profit = bets.filter((b) => monthKey(b.date) === mk).reduce((acc, b) => acc + calcProfit(b, "E"), 0);
-      return { label: monthLabel(mk), bk: bkVal, profit, mk };
-    }).filter((d) => d.bk > 0),
-    [allMonths, bets, bankroll]);
+      // Add start point if we have it and it's the first month or different from prev end
+      if (bkEntry.start && points.length === 0) {
+        points.push({ label: monthLabel(mk) + " (start)", bk: bkEntry.start, profit: 0, mk });
+      }
+      if (bkEntry.end) {
+        points.push({ label: monthLabel(mk), bk: bkEntry.end, profit, mk });
+      } else if (bkEntry.start) {
+        // Current month — use running balance
+        const running = bkEntry.start + profit - Number(bkEntry.fees ?? 0);
+        points.push({ label: monthLabel(mk) + " (now)", bk: running, profit, mk });
+      }
+    });
+    return points.filter(d => d.bk > 0);
+  }, [allMonths, bets, bankroll]);
 
   const maxProfitAbs = Math.max(...Object.values(bySport).map((s) => Math.abs(s.profitE)), 1);
 
@@ -1278,7 +1304,7 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
 
           {/* MONTHLY BK */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {allMonths.map((mk) => {
+            {allMonths.filter(mk => filterMonth === "all" || mk === filterMonth).map((mk) => {
               const bk = bankroll[mk] ?? {};
               const running = runningBalance(mk);
               return (
@@ -1291,7 +1317,7 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
                     <div style={{ color: "#64748b" }}>Start: <b style={{ color: "#e2e8f0" }}>{bk.start ? bk.start.toLocaleString() + "€" : "–"}</b></div>
                     <div style={{ color: "#64748b" }}>End: <b style={{ color: "#e2e8f0" }}>{bk.end ? bk.end.toLocaleString() + "€" : "–"}</b></div>
                     <div style={{ color: "#64748b" }}>1u = <b style={{ color: "#38bdf8" }}>{bk.unitValue ? bk.unitValue + "€" : "–"}</b></div>
-                    <div style={{ color: "#64748b" }}>Fees: <b style={{ color: "#ef4444" }}>{bk.fees ? "-" + bk.fees + "€" : "–"}</b></div>
+                    <div style={{ color: "#64748b" }}>Delta: <b style={{ color: "#ef4444" }}>{bk.fees ? "-" + bk.fees + "€" : "–"}</b></div>
                   </div>
                   {running !== null && (
                     <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1305,7 +1331,7 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
               );
             })}
             {/* Show months with BK config but no bets — only if they have actual data */}
-            {Object.keys(bankroll).filter(mk => !allMonths.includes(mk) && (bankroll[mk]?.start || bankroll[mk]?.unitValue)).map(mk => {
+            {Object.keys(bankroll).filter(mk => !allMonths.includes(mk) && (bankroll[mk]?.start || bankroll[mk]?.unitValue) && (filterMonth === "all" || mk === filterMonth)).map(mk => {
               const bk = bankroll[mk] ?? {};
               return (
                 <div key={mk} style={{ background: "#111827", borderRadius: 12, padding: "12px 14px", border: "1px solid #1e293b" }}>
@@ -1392,7 +1418,7 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
           <div style={{ background: "#1e293b", borderRadius: 16, padding: 24, margin: 20, border: "1px solid #334155", maxWidth: 340, width: "100%" }}>
             <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Bankroll — {monthLabel(bkEdit)}</div>
-            {[["start", "Starting bankroll (€)"], ["end", "End bankroll (€)"], ["unitValue", "1 unit = (€)"], ["fees", "Fees PS3838 (€)"]].map(([k, lbl]) => (
+            {[["start", "Starting bankroll (€)"], ["end", "End bankroll (€)"], ["unitValue", "1 unit = (€)"], ["fees", "Delta (€)"]].map(([k, lbl]) => (
               <div key={k} style={{ marginBottom: 12 }}>
                 <Input label={lbl} type="number" value={bkForm[k]} onChange={(e) => setBkForm((f) => ({ ...f, [k]: e.target.value }))} />
               </div>
