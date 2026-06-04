@@ -21,27 +21,27 @@ const useWindowWidth = () => {
 const SPORTS_CONFIG = {
   Tennis: {
     leagues: ["ATP", "WTA", "Outright"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Parlay"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay"],
   },
   Baseball: {
     leagues: ["MLB", "KBO", "Outright"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Parlay"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay"],
   },
   Football: {
     leagues: ["Ligue 1", "BPL", "Liga", "Serie A", "Bundesliga", "European Cup", "World Cup", "National Cup", "Exhibition", "Outright", "Exotique"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Parlay"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay"],
   },
   Basketball: {
     leagues: ["NBA", "EuroLeague", "Outright", "Autre"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Outright", "Parlay"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Outright", "Parlay"],
   },
   Hockey: {
     leagues: ["NHL", "Magnus", "Outright"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Parlay"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay"],
   },
-  eSport: { leagues: ["Outright"], subCats: ["ML"] },
-  "F1": { leagues: ["Outright"], subCats: [] },
-  Cycling: { leagues: ["Outright"], subCats: [] },
+  eSport: { leagues: ["Outright"], subCats: ["ML", "Boost"] },
+  "F1": { leagues: ["Outright"], subCats: ["Boost"] },
+  Cycling: { leagues: ["Outright"], subCats: ["Boost"] },
 };
 
 const SPORTS = Object.keys(SPORTS_CONFIG);
