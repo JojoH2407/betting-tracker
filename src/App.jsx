@@ -28,7 +28,7 @@ const SPORTS_CONFIG = {
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Parlay"],
   },
   Football: {
-    leagues: ["Ligue 1", "BPL", "Liga", "Serie A", "Bundesliga", "European Cup", "World Cup", "National Cup", "Outright", "Exotique"],
+    leagues: ["Ligue 1", "BPL", "Liga", "Serie A", "Bundesliga", "European Cup", "World Cup", "National Cup", "Exhibition", "Outright", "Exotique"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Parlay"],
   },
   Basketball: {
