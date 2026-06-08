@@ -106,77 +106,101 @@ const calcProfit = (bet, field = "E") => {
 };
 
 // ── SPARKLINE ─────────────────────────────────────────────────────────────────
-const LineChart = ({ data, valueKey = "bk", colorKey = "profit", emptyMsg, color = "#38bdf8", showDots = true, H = 110 }) => {
+const LineChart = ({ data, valueKey = "bk", colorKey = "profit", emptyMsg, color = "#2dd4bf", H = 140 }) => {
   if (!data || data.length < 2) return (
     <div style={{ textAlign: "center", color: "#475569", padding: "24px 0", fontSize: 13 }}>
       {emptyMsg ?? "Not enough data"}
     </div>
   );
   const vals = data.map((d) => d[valueKey]);
-  const min = Math.min(...vals), max = Math.max(...vals);
-  const range = max - min || 1;
-  const W = 340, padX = 14, padY = 16;
-  const chartW = W - padX * 2, chartH = H - padY * 2;
+  const rawMin = Math.min(...vals);
+  const rawMax = Math.max(...vals);
+  const padding = (rawMax - rawMin) * 0.12 || 50;
+  const min = rawMin - padding;
+  const max = rawMax + padding;
+  const range = max - min;
 
-  const toX = (i) => padX + (i / (data.length - 1)) * chartW;
-  const toY = (v) => padY + chartH - ((v - min) / range) * chartH;
+  const W = 340, padLeft = 48, padRight = 12, padTop = 12, padBottom = 24;
+  const chartW = W - padLeft - padRight;
+  const chartH = H - padTop - padBottom;
+
+  const toX = (i) => padLeft + (i / (data.length - 1)) * chartW;
+  const toY = (v) => padTop + chartH - ((v - min) / range) * chartH;
 
   const pts = data.map((d, i) => [toX(i), toY(d[valueKey])]);
-  const smooth = pts.map(([x, y], i) => {
+
+  // Smooth bezier path
+  const pathD = pts.reduce((acc, [x, y], i) => {
     if (i === 0) return `M${x},${y}`;
     const [px, py] = pts[i - 1];
-    const cpx = (px + x) / 2;
-    return `C${cpx},${py} ${cpx},${y} ${x},${y}`;
-  }).join(" ");
-  const areaPath = `M${pts[0][0]},${H - padY} ` + smooth.replace(/^M[\d.]+,[\d.]+/, `L${pts[0][0]},${pts[0][1]}`) + ` L${pts[pts.length-1][0]},${H - padY} Z`;
-  const [lx, ly] = pts[pts.length - 1];
+    const cp1x = px + (x - px) * 0.5;
+    const cp2x = x - (x - px) * 0.5;
+    return `${acc} C${cp1x},${py} ${cp2x},${y} ${x},${y}`;
+  }, "");
 
-  // Grid lines
-  const gridLines = [0, 0.5, 1].map(t => ({
-    y: padY + chartH * (1 - t),
-    val: min + range * t,
-  }));
+  const areaD = `${pathD} L${pts[pts.length-1][0]},${padTop + chartH} L${pts[0][0]},${padTop + chartH} Z`;
+
+  // Y axis labels (4 lines)
+  const gridCount = 4;
+  const gridLines = Array.from({ length: gridCount + 1 }, (_, i) => {
+    const t = i / gridCount;
+    const v = min + range * t;
+    return { y: padTop + chartH * (1 - t), v };
+  });
+
+  // Last value
+  const [lx, ly] = pts[pts.length - 1];
+  const lastVal = data[data.length - 1][valueKey];
+  const isPositive = colorKey ? data[data.length - 1][colorKey] >= 0 : true;
+  const lineColor = color;
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
       <defs>
-        <linearGradient id={`grad-${color.replace("#","")}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.2" />
-          <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+        <linearGradient id="lg-chart" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={lineColor} stopOpacity="0.25" />
+          <stop offset="75%" stopColor={lineColor} stopOpacity="0.05" />
+          <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
         </linearGradient>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="2" result="blur" />
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
       </defs>
-      {/* Grid */}
-      {gridLines.map(({ y, val }, i) => (
+
+      {/* Grid lines + Y labels */}
+      {gridLines.map(({ y, v }, i) => (
         <g key={i}>
-          <line x1={padX} y1={y} x2={W - padX} y2={y} stroke="#1e293b" strokeWidth="1" />
-          <text x={padX - 2} y={y + 4} fontSize="8" fill="#475569" textAnchor="end">
-            {Math.round(val)}
+          <line x1={padLeft} y1={y} x2={W - padRight} y2={y}
+            stroke="#ffffff08" strokeWidth={i === 0 ? 0 : 1} />
+          <text x={padLeft - 6} y={y + 3} fontSize="8" fill="#334155"
+            textAnchor="end" fontFamily="monospace">
+            {v >= 1000 ? `${(v/1000).toFixed(1)}k` : Math.round(v)}
           </text>
         </g>
       ))}
-      {/* Area */}
-      <path d={areaPath} fill={`url(#grad-${color.replace("#","")})`} />
-      {/* Line */}
-      <path d={smooth} fill="none" stroke={color} strokeWidth="2.5"
-        strokeLinejoin="round" strokeLinecap="round" />
-      {/* Dots */}
-      {showDots && pts.map(([x, y], i) => {
-        const dotColor = colorKey && data[i][colorKey] !== undefined
-          ? (data[i][colorKey] >= 0 ? "#22c55e" : "#ef4444") : color;
-        return (
-          <g key={i}>
-            <circle cx={x} cy={y} r={4} fill="#111827" stroke={dotColor} strokeWidth="2" />
-          </g>
-        );
-      })}
-      {/* Last dot highlight */}
-      <circle cx={lx} cy={ly} r={5} fill={color} opacity={0.95} />
-      <circle cx={lx} cy={ly} r={8} fill={color} opacity={0.15} />
+
+      {/* Zero line if applicable */}
+      {min < 0 && max > 0 && (
+        <line x1={padLeft} y1={toY(0)} x2={W - padRight} y2={toY(0)}
+          stroke="#ffffff18" strokeWidth="1" strokeDasharray="3,3" />
+      )}
+
+      {/* Area fill */}
+      <path d={areaD} fill="url(#lg-chart)" />
+
+      {/* Main line */}
+      <path d={pathD} fill="none" stroke={lineColor} strokeWidth="2"
+        strokeLinejoin="round" strokeLinecap="round" filter="url(#glow)" />
+
+      {/* Last point */}
+      <circle cx={lx} cy={ly} r={3} fill={lineColor} />
+      <circle cx={lx} cy={ly} r={6} fill={lineColor} opacity={0.2} />
     </svg>
   );
 };
 
-const Sparkline = ({ data }) => <LineChart data={data} valueKey="bk" colorKey="profit" emptyMsg="Fill in monthly bankroll end values to see the chart" />;
+const Sparkline = ({ data }) => <LineChart data={data} valueKey="bk" colorKey="profit" emptyMsg="Fill in monthly bankroll end values to see the chart" color="#2dd4bf" />;
 
 // ── STAT ROW ──────────────────────────────────────────────────────────────────
 function StatRow({ label, value, color, sub }) {
@@ -1328,7 +1352,7 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
               Daily Profit Evolution {filterMonth !== "all" ? "" : "(All Time)"}
             </div>
             <LineChart data={dailyChartData} valueKey="value" colorKey="profit"
-              emptyMsg="No settled bets yet" color="#a78bfa" H={90} />
+              emptyMsg="No settled bets yet" color="#2dd4bf" />
             {dailyChartData.length > 0 && (
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 12 }}>
                 <span style={{ color: "#64748b" }}>Start: <b style={{ color: "#e2e8f0" }}>0€</b></span>
