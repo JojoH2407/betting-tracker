@@ -106,46 +106,76 @@ const calcProfit = (bet, field = "E") => {
 };
 
 // ── SPARKLINE ─────────────────────────────────────────────────────────────────
-const LineChart = ({ data, valueKey = "bk", colorKey = "profit", emptyMsg, color = "#38bdf8", showDots = true, H = 90 }) => {
+const LineChart = ({ data, valueKey = "bk", colorKey = "profit", emptyMsg, color = "#38bdf8", showDots = true, H = 110 }) => {
   if (!data || data.length < 2) return (
-    <div style={{ textAlign: "center", color: "#475569", padding: "20px 0", fontSize: 13 }}>
+    <div style={{ textAlign: "center", color: "#475569", padding: "24px 0", fontSize: 13 }}>
       {emptyMsg ?? "Not enough data"}
     </div>
   );
   const vals = data.map((d) => d[valueKey]);
   const min = Math.min(...vals), max = Math.max(...vals);
   const range = max - min || 1;
-  const W = 340, pad = 12;
-  const pts = data.map((d, i) => {
-    const x = pad + (i / (data.length - 1)) * (W - pad * 2);
-    const y = pad + (H - pad * 2) - ((d[valueKey] - min) / range) * (H - pad * 2);
-    return [x, y];
-  });
-  const polyline = pts.map((p) => p.join(",")).join(" ");
+  const W = 340, padX = 14, padY = 16;
+  const chartW = W - padX * 2, chartH = H - padY * 2;
+
+  const toX = (i) => padX + (i / (data.length - 1)) * chartW;
+  const toY = (v) => padY + chartH - ((v - min) / range) * chartH;
+
+  const pts = data.map((d, i) => [toX(i), toY(d[valueKey])]);
+  const smooth = pts.map(([x, y], i) => {
+    if (i === 0) return `M${x},${y}`;
+    const [px, py] = pts[i - 1];
+    const cpx = (px + x) / 2;
+    return `C${cpx},${py} ${cpx},${y} ${x},${y}`;
+  }).join(" ");
+  const areaPath = `M${pts[0][0]},${H - padY} ` + smooth.replace(/^M[\d.]+,[\d.]+/, `L${pts[0][0]},${pts[0][1]}`) + ` L${pts[pts.length-1][0]},${H - padY} Z`;
   const [lx, ly] = pts[pts.length - 1];
-  // area fill path
-  const areaPath = `M${pts[0][0]},${H - pad} ` + pts.map(([x,y]) => `L${x},${y}`).join(" ") + ` L${pts[pts.length-1][0]},${H - pad} Z`;
+
+  // Grid lines
+  const gridLines = [0, 0.5, 1].map(t => ({
+    y: padY + chartH * (1 - t),
+    val: min + range * t,
+  }));
+
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
       <defs>
-        <linearGradient id="area-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.15" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        <linearGradient id={`grad-${color.replace("#","")}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.2" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.02" />
         </linearGradient>
       </defs>
-      <path d={areaPath} fill="url(#area-grad)" />
-      <polyline points={polyline} fill="none" stroke={color} strokeWidth="2.5"
-        strokeLinejoin="round" strokeLinecap="round" />
-      {showDots && pts.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={3}
-          fill={colorKey && data[i][colorKey] !== undefined ? (data[i][colorKey] >= 0 ? "#22c55e" : "#ef4444") : color} />
+      {/* Grid */}
+      {gridLines.map(({ y, val }, i) => (
+        <g key={i}>
+          <line x1={padX} y1={y} x2={W - padX} y2={y} stroke="#1e293b" strokeWidth="1" />
+          <text x={padX - 2} y={y + 4} fontSize="8" fill="#475569" textAnchor="end">
+            {Math.round(val)}
+          </text>
+        </g>
       ))}
-      <circle cx={lx} cy={ly} r={5} fill={color} opacity={0.9} />
+      {/* Area */}
+      <path d={areaPath} fill={`url(#grad-${color.replace("#","")})`} />
+      {/* Line */}
+      <path d={smooth} fill="none" stroke={color} strokeWidth="2.5"
+        strokeLinejoin="round" strokeLinecap="round" />
+      {/* Dots */}
+      {showDots && pts.map(([x, y], i) => {
+        const dotColor = colorKey && data[i][colorKey] !== undefined
+          ? (data[i][colorKey] >= 0 ? "#22c55e" : "#ef4444") : color;
+        return (
+          <g key={i}>
+            <circle cx={x} cy={y} r={4} fill="#111827" stroke={dotColor} strokeWidth="2" />
+          </g>
+        );
+      })}
+      {/* Last dot highlight */}
+      <circle cx={lx} cy={ly} r={5} fill={color} opacity={0.95} />
+      <circle cx={lx} cy={ly} r={8} fill={color} opacity={0.15} />
     </svg>
   );
 };
 
-// Keep Sparkline as alias
 const Sparkline = ({ data }) => <LineChart data={data} valueKey="bk" colorKey="profit" emptyMsg="Fill in monthly bankroll end values to see the chart" />;
 
 // ── STAT ROW ──────────────────────────────────────────────────────────────────
@@ -330,7 +360,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [bankroll, setBankrollState] = useState({});
   const [editId, setEditId] = useState(null);
-  const [filterMonth, setFilterMonth] = useState("all");
+  const [filterMonth, setFilterMonth] = useState(monthKey(today()));
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const [batchForms, setBatchForms] = useState([emptyBetForm()]);
@@ -937,6 +967,7 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
   const [showFilters, setShowFilters] = useState(false);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("date");
+  const [statusFilter, setStatusFilter] = useState("All");
 
   useEffect(() => {
     if (scrollToDate) {
@@ -946,11 +977,13 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
         onScrollDone?.();
       }, 100);
     }
-  }, [scrollToDate]); // "date" | "sport"
+  }, [scrollToDate]);
 
   const sports = ["All", ...Object.keys(SPORTS_CONFIG)];
+  const statuses = ["All", "Pending", "Win", "Lose", "Void"];
   const filtered = bets
     .filter(b => sportFilter === "All" || b.sport === sportFilter)
+    .filter(b => statusFilter === "All" || b.result === statusFilter)
     .filter(b => !search || b.bet?.toLowerCase().includes(search.toLowerCase()) || b.league?.toLowerCase().includes(search.toLowerCase()));
   
   const resultOrder = { "Pending": 0, "Win": 1, "Lose": 1, "Void": 2 };
@@ -1034,6 +1067,16 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
             <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Filter by sport</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {sports.map(s => <Chip key={s} label={s} active={sportFilter === s} onClick={() => setSportFilter(s)} />)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Filter by status</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {statuses.map(s => (
+                <Chip key={s} label={s} active={statusFilter === s}
+                  color={s !== "All" ? RESULT_COLORS[s] : undefined}
+                  onClick={() => setStatusFilter(s)} />
+              ))}
             </div>
           </div>
           <div>
@@ -1262,8 +1305,8 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
 
       {statsTab === "bk" && (
         <>
-          {/* CHART */}
-          <div style={{ background: "#111827", borderRadius: 12, padding: 14, border: "1px solid #1e293b" }}>
+          {/* CHART — only on All Time view */}
+          {filterMonth === "all" && <div style={{ background: "#111827", borderRadius: 12, padding: 14, border: "1px solid #1e293b" }}>
             <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Bankroll Evolution</div>
             <Sparkline data={bkChartData} />
             {bkChartData.length > 0 && (
@@ -1277,7 +1320,7 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
                 ))}
               </div>
             )}
-          </div>
+          </div>}
 
           {/* DAILY PROFIT CHART */}
           <div style={{ background: "#111827", borderRadius: 12, padding: 14, border: "1px solid #1e293b" }}>
