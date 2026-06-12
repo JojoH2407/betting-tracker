@@ -939,7 +939,7 @@ function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, s
         <div style={{ fontSize: 10, fontWeight: 700, color: T.text3, textTransform: "uppercase", letterSpacing: 2 }}>
           {editId ? "Edit Bet" : `New Bet${batchForms.length > 1 ? "s (" + batchForms.length + ")" : ""}`}
         </div>
-        {editId && <button onClick={() => { setEditId(null); setBatchForms([emptyBetForm()]); setTab("list"); }} style={{ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 12 }>Cancel</button>}
+        {editId && <button onClick={() => { setEditId(null); setBatchForms([emptyBetForm()]); setTab("list"); }} style={{ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 12 }}>Cancel</button>}
       </div>
 
       {batchForms.map((f, i) => (
