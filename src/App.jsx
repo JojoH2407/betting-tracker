@@ -44,6 +44,19 @@ const SPORTS_CONFIG = {
   Cycling: { leagues: ["Outright"], subCats: ["Boost"] },
 };
 
+// ── THEME COLORS ─────────────────────────────────────────────────────────────
+const T = {
+  bg: "#0f172a",       // Arrière-plan principal (Slate 900)
+  card: "#1e293b",     // Cartes et éléments (Slate 800)
+  card2: "#334155",    // Sous-éléments ou inputs (Slate 700)
+  border: "#1e293b",   // Bordures légères
+  border2: "#475569",  // Bordures plus prononcées
+  text: "#f8fafc",     // Texte principal (Slate 5)
+  text2: "#cbd5e1",    // Texte secondaire (Slate 300)
+  text3: "#64748b",    // Texte tertiaire / discret (Slate 500)
+  accent: "#38bdf8",   // Couleur d'accentuation (Sky 400)
+};
+
 const SPORTS = Object.keys(SPORTS_CONFIG);
 const RESULTS = ["Pending", "Win", "Lose", "Void"];
 
