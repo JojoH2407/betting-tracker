@@ -833,7 +833,7 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
   };
 
   return (
-    <div style={ background: T.card, borderRadius: 10, padding: "12px", border: `1px solid ${T.border}`, display: "flex", flexDirection: "column", gap: 10 }>
+    <div style={{ background: T.card, borderRadius: 10, padding: "12px", border: `1px solid ${T.border}`, display: "flex", flexDirection: "column", gap: 10 }}>
       {/* header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: 1.5 }}>Bet {index + 1}</div>
@@ -883,9 +883,9 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
         <div>
           <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Stake u</div>
           {computedU
-            ? <div style={ background: T.card2, border: `1px solid ${T.accent}30`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: T.accent, fontWeight: 700 }>{computedU}u</div>
+            ? <div style={{ background: T.card2, border: `1px solid ${T.accent}30`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: T.accent, fontWeight: 700 }>{computedU}u</div>
             : <input type="number" step="0.25" value={manualU} onChange={(e) => set("stakeU", e.target.value)}
-                style={ width: "100%", background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" } />
+                style={{ width: "100%", background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" } />
           }
         </div>
       </div>
@@ -916,11 +916,11 @@ function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, s
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }>
-        <div style={ fontSize: 10, fontWeight: 700, color: T.text3, textTransform: "uppercase", letterSpacing: 2 }>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: T.text3, textTransform: "uppercase", letterSpacing: 2 }}>
           {editId ? "Edit Bet" : `New Bet${batchForms.length > 1 ? "s (" + batchForms.length + ")" : ""}`}
         </div>
-        {editId && <button onClick={() => { setEditId(null); setBatchForms([emptyBetForm()]); setTab("list"); }} style={ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 12 }>Cancel</button>}
+        {editId && <button onClick={() => { setEditId(null); setBatchForms([emptyBetForm()]); setTab("list"); }} style={{ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 12 }>Cancel</button>}
       </div>
 
       {batchForms.map((f, i) => (
@@ -1111,18 +1111,18 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* toolbar */}
-      <div style={ display: "flex", gap: 6 }>
-        <label style={ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px", color: T.text2, fontSize: 12, cursor: "pointer", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }>
+      <div style={{ display: "flex", gap: 6 }}>
+        <label style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px", color: T.text2, fontSize: 12, cursor: "pointer", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
           <Icons.Upload /> Import
-          <input type="file" accept=".csv,.xlsx" onChange={onImport} style={ display: "none" } />
+          <input type="file" accept=".csv,.xlsx" onChange={onImport} style={{ display: "none" } />
         </label>
-        <button onClick={onExport} style={ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px", color: T.text2, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }>
+        <button onClick={onExport} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px", color: T.text2, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
           <Icons.Download /> Export
         </button>
-        <button onClick={downloadTemplate} style={ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px", color: T.accent, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }>
+        <button onClick={downloadTemplate} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px", color: T.accent, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
           📋 Template
         </button>
-        <button onClick={() => setShowFilters(f => !f)} style={ background: showFilters ? T.accentDim : T.card, border: `1px solid ${showFilters ? T.accent : T.border}`, borderRadius: 8, padding: "9px 11px", color: showFilters ? T.accent : T.text2, fontSize: 13, cursor: "pointer" }>
+        <button onClick={() => setShowFilters(f => !f)} style={{ background: showFilters ? T.accentDim : T.card, border: `1px solid ${showFilters ? T.accent : T.border}`, borderRadius: 8, padding: "9px 11px", color: showFilters ? T.accent : T.text2, fontSize: 13, cursor: "pointer" }}>
           ⚙︎
         </button>
       </div>
