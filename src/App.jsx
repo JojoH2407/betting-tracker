@@ -6,6 +6,25 @@ const supabase = createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4Y3JjeGxvbXZycHZ4Y25uY3BoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MTYwMTgsImV4cCI6MjA5NDE5MjAxOH0.-vlciOBd-go4MBck7lX4DNp5-aS5v0J1QGu4H-end4g"
 );
 
+
+// ── DESIGN TOKENS ─────────────────────────────────────────────────────────────
+const T = {
+  bg:       "#080e1a",
+  card:     "#0f1923",
+  card2:    "#131e2b",
+  border:   "#1a2a3a",
+  border2:  "#243548",
+  accent:   "#00d4aa",
+  accentDim:"#00d4aa22",
+  win:      "#00c896",
+  lose:     "#ff6b35",
+  void:     "#6b7a8d",
+  pending:  "#f0a500",
+  text:     "#f0f4f8",
+  text2:    "#7a9ab0",
+  text3:    "#3d5a70",
+};
+
 // ── RESPONSIVE ───────────────────────────────────────────────────────────────
 const useWindowWidth = () => {
   const [width, setWidth] = useState(window.innerWidth);
@@ -920,7 +939,7 @@ function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, s
         <div style={{ fontSize: 10, fontWeight: 700, color: T.text3, textTransform: "uppercase", letterSpacing: 2 }}>
           {editId ? "Edit Bet" : `New Bet${batchForms.length > 1 ? "s (" + batchForms.length + ")" : ""}`}
         </div>
-        {editId && <button onClick={() => { setEditId(null); setBatchForms([emptyBetForm()]); setTab("list"); }} style={{ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 12 }}>Cancel</button>}
+        {editId && <button onClick={() => { setEditId(null); setBatchForms([emptyBetForm()]); setTab("list"); }} style={{ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 12 }>Cancel</button>}
       </div>
 
       {batchForms.map((f, i) => (
@@ -1114,7 +1133,7 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
       <div style={{ display: "flex", gap: 6 }}>
         <label style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px", color: T.text2, fontSize: 12, cursor: "pointer", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
           <Icons.Upload /> Import
-          <input type="file" accept=".csv,.xlsx" onChange={onImport} style={{ display: "none" }} />
+          <input type="file" accept=".csv,.xlsx" onChange={onImport} style={{ display: "none" } />
         </label>
         <button onClick={onExport} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px", color: T.text2, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
           <Icons.Download /> Export
