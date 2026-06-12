@@ -1133,7 +1133,7 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
       <div style={{ display: "flex", gap: 6 }}>
         <label style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px", color: T.text2, fontSize: 12, cursor: "pointer", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
           <Icons.Upload /> Import
-          <input type="file" accept=".csv,.xlsx" onChange={onImport} style={{ display: "none" } />
+          <input type="file" accept=".csv,.xlsx" onChange={onImport} style={{ display: "none" }} />
         </label>
         <button onClick={onExport} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px", color: T.text2, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
           <Icons.Download /> Export
