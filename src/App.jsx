@@ -883,9 +883,9 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
         <div>
           <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Stake u</div>
           {computedU
-            ? <div style={{ background: T.card2, border: `1px solid ${T.accent}30`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: T.accent, fontWeight: 700 }>{computedU}u</div>
+            ? <div style={{ background: T.card2, border: `1px solid ${T.accent}30`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: T.accent, fontWeight: 700 }>{computedU}u}</div>
             : <input type="number" step="0.25" value={manualU} onChange={(e) => set("stakeU", e.target.value)}
-                style={{ width: "100%", background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" } />
+                style={{ width: "100%", background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" }} />
           }
         </div>
       </div>
