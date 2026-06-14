@@ -668,11 +668,10 @@ export default function App() {
   const handleCSVImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const imported = parseCSV(ev.target.result);
-      if (!imported.length) { alert("No valid bets found in CSV"); return; }
-      // Strip client-side ids before insert
+    const isXLSX = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
+
+    const doImport = async (imported) => {
+      if (!imported.length) { alert("No valid bets found in file"); return; }
       const toInsert = imported.map(({ id, ...rest }) => ({
         date: rest.date, sport: rest.sport, league: rest.league ?? "",
         subcat: rest.subCat ?? rest.subcat ?? "", bet: rest.bet, odd: Number(rest.odd),
@@ -683,7 +682,32 @@ export default function App() {
       if (data) { setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0) })), ...bets]); alert(`✅ ${data.length} bets imported!`); }
       else alert("Import error: " + error.message);
     };
-    reader.readAsText(file);
+
+    if (isXLSX) {
+      // Load SheetJS for XLSX parsing
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+      script.onload = () => {
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          const XLSX = window.XLSX;
+          const wb = XLSX.read(ev.target.result, { type: "array" });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_csv(ws);
+          const imported = parseCSV(rows);
+          await doImport(imported);
+        };
+        reader.readAsArrayBuffer(file);
+      };
+      document.head.appendChild(script);
+    } else {
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const imported = parseCSV(ev.target.result);
+        await doImport(imported);
+      };
+      reader.readAsText(file);
+    }
     e.target.value = "";
   };
 
@@ -1133,7 +1157,7 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
       <div style={{ display: "flex", gap: 6 }}>
         <label style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px", color: T.text2, fontSize: 12, cursor: "pointer", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
           <Icons.Upload /> Import
-          <input type="file" accept=".csv,.xlsx" onChange={onImport} style={{ display: "none" }} />
+          <input type="file" accept=".csv,.xlsx" onChange={onImport} style={{ display: "none" } />
         </label>
         <button onClick={onExport} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px", color: T.text2, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
           <Icons.Download /> Export
