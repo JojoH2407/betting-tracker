@@ -338,17 +338,25 @@ const downloadTemplate = () => {
 };
 
 // ── CSV IMPORT ────────────────────────────────────────────────────────────────
-const parseCSVLine = (line) => {
+const parseCSVLine = (line, sep = ",") => {
   const result = [];
   let cur = "", inQuote = false;
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
     if (ch === '"') { inQuote = !inQuote; }
-    else if (ch === "," && !inQuote) { result.push(cur.trim()); cur = ""; }
+    else if (ch === sep && !inQuote) { result.push(cur.trim()); cur = ""; }
     else { cur += ch; }
   }
   result.push(cur.trim());
   return result;
+};
+
+const detectSeparator = (text) => {
+  const firstLines = text.split(/
+?\n/).slice(0, 3).join("\n");
+  const semis = (firstLines.match(/;/g) || []).length;
+  const commas = (firstLines.match(/,/g) || []).length;
+  return semis > commas ? ";" : ",";
 };
 
 const parseDate = (raw) => {
@@ -362,15 +370,22 @@ const parseDate = (raw) => {
 };
 
 const parseCSV = (text) => {
-  const lines = text.trim().split(/\r?\n/);
-  const headers = parseCSVLine(lines[0]).map((h) => h.replace(/"/g, "").toLowerCase().trim());
+  const sep = detectSeparator(text);
+  const allLines = text.trim().split(/\r?\n/);
+  // Skip lines before the actual header (e.g. "Tableau 1")
+  const headerIdx = allLines.findIndex(l => {
+    const lower = l.toLowerCase();
+    return lower.includes("date") && (lower.includes("sport") || lower.includes("bet"));
+  });
+  const lines = headerIdx >= 0 ? allLines.slice(headerIdx) : allLines;
+  const headers = parseCSVLine(lines[0], sep).map((h) => h.replace(/"/g, "").toLowerCase().trim());
 
   const resultMap = { win: "Win", lose: "Lose", void: "Void", "": "", pending: "Pending" };
   const sportMap = { tennis: "Tennis", baseball: "Baseball", mlb: "Baseball", football: "Football", basketball: "Basketball", nba: "Basketball", esport: "eSport", "e-sport": "eSport", f1: "F1", cycling: "Cycling", hockey: "Hockey", nhl: "Hockey", mma: "MMA", ufc: "MMA" };
 
   return lines.slice(1).map((line) => {
     if (!line.trim()) return null;
-    const vals = parseCSVLine(line);
+    const vals = parseCSVLine(line, sep);
     const row = {};
     headers.forEach((h, i) => { row[h] = (vals[i] ?? "").replace(/^"|"$/g, "").trim(); });
 
