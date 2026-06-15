@@ -352,8 +352,7 @@ const parseCSVLine = (line, sep = ",") => {
 };
 
 const detectSeparator = (text) => {
-  const firstLines = text.split(/
-?\n/).slice(0, 3).join("\n");
+  const firstLines = text.split(/\r?\n/).slice(0, 3).join("\n");
   const semis = (firstLines.match(/;/g) || []).length;
   const commas = (firstLines.match(/,/g) || []).length;
   return semis > commas ? ";" : ",";
