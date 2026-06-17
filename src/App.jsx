@@ -578,7 +578,10 @@ export default function App() {
   const groupStats = (bets, key) => {
     const map = {};
     bets.forEach((b) => {
-      const k = key === "league" ? (b.league || b.sport || "–") : (b[key] || "–");
+      let k;
+      if (key === "league") k = b.league || b.sport || "–";
+      else if (key === "subCat") k = b.subCat || b.subcat || "–";
+      else k = b[key] || "–";
       if (!map[k]) map[k] = { bets: [], wins: 0, profitE: 0, profitU: 0, totalInvE: 0, totalInvU: 0, oddsSum: 0, oddsCount: 0 };
       const s = map[k];
       s.bets.push(b);
@@ -1470,8 +1473,10 @@ function StatsTab({ total, bySport, byLeague, bySubCat, maxProfitAbs, bkChartDat
 
       {statsTab === "subcat" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {renderGroup(bySubCat, Math.max(...Object.values(bySubCat).map((s) => Math.abs(s.profitE)), 1))}
-          {Object.keys(bySubCat).length === 0 && <div style={{ color: T.text3, textAlign: "center", padding: 20 }}>No data</div>}
+          {Object.keys(bySubCat).length > 0
+            ? renderGroup(bySubCat, Math.max(...Object.values(bySubCat).map((s) => Math.abs(s.profitE)), 1))
+            : <div style={{ color: T.text3, textAlign: "center", padding: 20 }}>No data</div>
+          }
         </div>
       )}
 
