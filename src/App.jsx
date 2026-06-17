@@ -598,7 +598,12 @@ export default function App() {
 
   const bySport = useMemo(() => groupStats(filtered, "sport"), [filtered]);
   const byLeague = useMemo(() => groupStats(filtered, "league"), [filtered]);
-  const bySubCat = useMemo(() => groupStats(filtered, "subCat"), [filtered]);
+  const bySubCat = useMemo(() => {
+    const map = groupStats(filtered, "subCat");
+    // Remove empty subCat entries
+    delete map["–"];
+    return map;
+  }, [filtered]);
 
   const total = useMemo(() => {
     let wins = 0, settled = 0, profitE = 0, profitU = 0, totalInvE = 0, totalInvU = 0, oddsSum = 0, oddsCount = 0;
@@ -1077,8 +1082,8 @@ function DayGroup({ date, bets, onEdit, onDelete, onUpdateResult, defaultOpen })
 
 function WeekGroup({ weekLabel, days, bets, onEdit, onDelete, onUpdateResult, defaultOpen }) {
   const currentWeek = weekKey(today());
-  const isCurrentOrFutureWeek = weekLabel >= currentWeek || days.some(d => d >= today());
-  const [open, setOpen] = useState(defaultOpen ?? isCurrentOrFutureWeek);
+  const isCurrentWeek = weekLabel === currentWeek;
+  const [open, setOpen] = useState(defaultOpen ?? isCurrentWeek);
   const profitE = bets.reduce((a, b) => a + calcProfit(b, "E"), 0);
   const profitU = bets.reduce((a, b) => a + calcProfit(b, "U"), 0);
   const settled = bets.filter(b => b.result !== "Pending" && b.result !== "Void");
@@ -1294,10 +1299,10 @@ function BetCard({ bet, onEdit, onDelete, onUpdateResult }) {
             <Tag color={RESULT_COLORS[bet.result]}>{bet.result}</Tag>
           </div>
           <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, marginBottom: 4, color: T.text, overflow: "hidden", textOverflow: "ellipsis" }}>{bet.bet}</div>
-          <div style={{ fontSize: 11, color: T.text3, display: "flex", gap: 10, fontVariantNumeric: "tabular-nums" }}>
-            <span>@{Number(bet.odd ?? 0).toFixed(3)}</span>
-            <span>{Number(bet.stakeE ?? bet.stakee ?? 0).toFixed(2).replace(/\.?0+$/, "")}€</span>
-            <span>{Number(bet.stakeU ?? bet.stakeu ?? 0).toFixed(2)}u</span>
+          <div style={{ display: "flex", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, color: T.text3, background: T.card2, borderRadius: 4, padding: "1px 6px", fontVariantNumeric: "tabular-nums" }}>@{Number(bet.odd ?? 0).toFixed(3)}</span>
+            <span style={{ fontSize: 11, color: T.text2, background: T.card2, borderRadius: 4, padding: "1px 6px", fontVariantNumeric: "tabular-nums" }}>{Number(bet.stakeE ?? bet.stakee ?? 0).toFixed(2).replace(/\.?0+$/, "")}€</span>
+            <span style={{ fontSize: 11, color: T.text2, background: T.card2, borderRadius: 4, padding: "1px 6px", fontVariantNumeric: "tabular-nums" }}>{Number(bet.stakeU ?? bet.stakeu ?? 0).toFixed(2)}u</span>
           </div>
           {bet.note && <div style={{ fontSize: 11, color: T.text3, marginTop: 3, fontStyle: "italic" }}>{bet.note}</div>}
           {bet.result === "Pending" && (
@@ -1317,8 +1322,13 @@ function BetCard({ bet, onEdit, onDelete, onUpdateResult }) {
         </div>
         <div style={{ textAlign: "right", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
           {bet.result !== "Pending" && bet.result !== "Void" && (
-            <div style={{ fontSize: 14, fontWeight: 800, color: profitE >= 0 ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>
-              {fmt(profitE)}€
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: profitE >= 0 ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>
+                {fmt(profitE)}€
+              </div>
+              <div style={{ fontSize: 10, color: profitE >= 0 ? T.win + "99" : T.lose + "99", fontVariantNumeric: "tabular-nums" }}>
+                {fmt(calcProfit(bet, "U"))}u
+              </div>
             </div>
           )}
           <div style={{ display: "flex", gap: 4 }}>
