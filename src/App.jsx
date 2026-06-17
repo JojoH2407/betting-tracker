@@ -1282,7 +1282,6 @@ function BetCard({ bet, onEdit, onDelete, onUpdateResult }) {
       background: T.card, borderRadius: 10,
       borderLeft: `3px solid ${RESULT_COLORS[bet.result]}`,
       border: `1px solid ${T.border}`,
-      borderLeft: `3px solid ${RESULT_COLORS[bet.result]}`,
       padding: "11px 12px",
       transition: "border-color .2s",
     }}>
