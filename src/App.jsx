@@ -595,6 +595,7 @@ export default function App() {
 
   const bySport = useMemo(() => groupStats(filtered, "sport"), [filtered]);
   const byLeague = useMemo(() => groupStats(filtered, "league"), [filtered]);
+  const bySubCat = useMemo(() => groupStats(filtered, "subCat"), [filtered]);
 
   const total = useMemo(() => {
     let wins = 0, settled = 0, profitE = 0, profitU = 0, totalInvE = 0, totalInvU = 0, oddsSum = 0, oddsCount = 0;
@@ -777,9 +778,16 @@ export default function App() {
           </div>
           {/* Right column: tabs */}
           <div>
-            <div style={{ display: "flex", gap: 12, marginBottom: 20, borderBottom: "1px solid #1e293b", paddingBottom: 12 }}>
-              {[["list","📋 Bets"], ["stats","📊 Stats"]].map(([k, l]) => (
-                <button key={k} onClick={() => setTab(k)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, fontWeight: 700, color: tab === k ? "#38bdf8" : "#475569", borderBottom: tab === k ? "2px solid #38bdf8" : "2px solid transparent", paddingBottom: 8 }}>{l}</button>
+            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+              {[["list","Bets"], ["stats","Stats"]].map(([k, l]) => (
+                <button key={k} onClick={() => setTab(k)} style={{
+                  background: tab === k ? T.accentDim : "transparent",
+                  border: `1px solid ${tab === k ? T.accent : T.border}`,
+                  borderRadius: 8, padding: "8px 20px",
+                  cursor: "pointer", fontSize: 13, fontWeight: 700,
+                  color: tab === k ? T.accent : T.text3,
+                  transition: "all .15s", letterSpacing: 0.3,
+                }}>{l}</button>
               ))}
             </div>
             {tab !== "add" && (
@@ -1124,30 +1132,31 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
     .filter(b => statusFilter === "All" || b.result === statusFilter)
     .filter(b => !search || b.bet?.toLowerCase().includes(search.toLowerCase()) || b.league?.toLowerCase().includes(search.toLowerCase()));
   
-  const resultOrder = { "Pending": 0, "Win": 1, "Lose": 1, "Void": 2 };
-
   const sorted = [...filtered].sort((a, b) => {
-    // Always: date desc first
+    // 1. Date desc
     const dateCmp = b.date.localeCompare(a.date);
     if (dateCmp !== 0) return dateCmp;
 
+    // 2. Sort by sport if sortBy === "sport"
     if (sortBy === "sport") {
+      return a.sport.localeCompare(b.sport);
+    }
+
+    // 3. Pending first, grouped by sport
+    const aPending = a.result === "Pending";
+    const bPending = b.result === "Pending";
+    if (aPending !== bPending) return aPending ? -1 : 1;
+
+    // 4. Within Pending: sort by sport
+    if (aPending && bPending) {
       const sportCmp = a.sport.localeCompare(b.sport);
       if (sportCmp !== 0) return sportCmp;
     }
 
-    // Within same day (and sport if sportBy): Pending first, then settled
-    const resCmp = (resultOrder[a.result] ?? 1) - (resultOrder[b.result] ?? 1);
-    if (resCmp !== 0) return resCmp;
-
-    // Within same result group: sort by sport
-    const sportCmp = a.sport.localeCompare(b.sport);
-    if (sportCmp !== 0) return sportCmp;
-
-    // Finally by created_at
-    const caB = b.created_at ?? "";
+    // 5. Within settled: order by created_at (insertion order)
     const caA = a.created_at ?? "";
-    return caB.localeCompare(caA);
+    const caB = b.created_at ?? "";
+    return caA.localeCompare(caB); // ascending = oldest first within the day
   });
 
   // Group by week then by day (default) OR by sport
@@ -1285,7 +1294,7 @@ function BetCard({ bet, onEdit, onDelete, onUpdateResult }) {
           <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, marginBottom: 4, color: T.text, overflow: "hidden", textOverflow: "ellipsis" }}>{bet.bet}</div>
           <div style={{ fontSize: 11, color: T.text3, display: "flex", gap: 10, fontVariantNumeric: "tabular-nums" }}>
             <span>@{Number(bet.odd ?? 0).toFixed(3)}</span>
-            <span>{Number(bet.stakeE ?? bet.stakee ?? 0).toFixed(0)}€</span>
+            <span>{Number(bet.stakeE ?? bet.stakee ?? 0).toFixed(2).replace(/\.?0+$/, "")}€</span>
             <span>{Number(bet.stakeU ?? bet.stakeu ?? 0).toFixed(2)}u</span>
           </div>
           {bet.note && <div style={{ fontSize: 11, color: T.text3, marginTop: 3, fontStyle: "italic" }}>{bet.note}</div>}
@@ -1323,7 +1332,7 @@ function BetCard({ bet, onEdit, onDelete, onUpdateResult }) {
 // ════════════════════════════════════════════════════════════════════════════════
 // STATS TAB
 // ════════════════════════════════════════════════════════════════════════════════
-function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankroll, updateBankroll, allMonths, statsTab, setStatsTab, bets, dailyChartData, oddsRanges, filterMonth }) {
+function StatsTab({ total, bySport, byLeague, bySubCat, maxProfitAbs, bkChartData, bankroll, updateBankroll, allMonths, statsTab, setStatsTab, bets, dailyChartData, oddsRanges, filterMonth }) {
   const [bkEdit, setBkEdit] = useState(null);
   const [showShare, setShowShare] = useState(false);
   const [bkForm, setBkForm] = useState({ start: "", end: "", unitValue: "", fees: "" });
@@ -1417,9 +1426,9 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
       </button>
 
       {/* SUB-TABS */}
-      <div style={{ display: "flex", gap: 8, borderBottom: "1px solid #1e293b", paddingBottom: 12 }}>
-        {[["bk", "Bankroll"], ["sport", "By Sport"], ["league", "By League"]].map(([k, l]) => (
-          <button key={k} onClick={() => setStatsTab(k)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, color: statsTab === k ? "#38bdf8" : "#475569", borderBottom: statsTab === k ? "2px solid #38bdf8" : "2px solid transparent", paddingBottom: 4 }}>{l}</button>
+      <div style={{ display: "flex", gap: 8, borderBottom: `1px solid ${T.border}`, paddingBottom: 12, overflowX: "auto" }}>
+        {[["bk", "Bankroll"], ["sport", "By Sport"], ["league", "By League"], ["subcat", "By Type"]].map(([k, l]) => (
+          <button key={k} onClick={() => setStatsTab(k)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, color: statsTab === k ? T.accent : T.text3, borderBottom: statsTab === k ? `2px solid ${T.accent}` : "2px solid transparent", paddingBottom: 4, whiteSpace: "nowrap" }}>{l}</button>
         ))}
       </div>
 
@@ -1456,6 +1465,13 @@ function StatsTab({ total, bySport, byLeague, maxProfitAbs, bkChartData, bankrol
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {renderGroup(byLeague, Math.max(...Object.values(byLeague).map((s) => Math.abs(s.profitE)), 1))}
           {Object.keys(byLeague).length === 0 && <div style={{ color: T.text3, textAlign: "center", padding: 20 }}>No data</div>}
+        </div>
+      )}
+
+      {statsTab === "subcat" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {renderGroup(bySubCat, Math.max(...Object.values(bySubCat).map((s) => Math.abs(s.profitE)), 1))}
+          {Object.keys(bySubCat).length === 0 && <div style={{ color: T.text3, textAlign: "center", padding: 20 }}>No data</div>}
         </div>
       )}
 
