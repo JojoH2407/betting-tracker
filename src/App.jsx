@@ -315,17 +315,17 @@ const downloadTemplate = () => {
       {
         Date: "2026-06-12", Sport: "Tennis", League: "ATP", "Sub-cat": "ML",
         Bet: "Djokovic vs Alcaraz ML", Odd: 2.10, "Stake (€)": 60, "Stake (u)": 1.00,
-        Result: "Win", Note: ""
+        Result: "Win", Freebet: "No", Note: ""
       },
       {
         Date: "2026-06-12", Sport: "Baseball", League: "MLB", "Sub-cat": "Player Props",
         Bet: "Yankees vs Red Sox - Judge HR", Odd: 4.50, "Stake (€)": 15, "Stake (u)": 0.25,
-        Result: "Lose", Note: "Example note"
+        Result: "Lose", Freebet: "No", Note: "Example note"
       },
       {
         Date: "2026-06-12", Sport: "Football", League: "BPL", "Sub-cat": "AH",
         Bet: "Arsenal vs Chelsea AH -0.5", Odd: 1.95, "Stake (€)": 60, "Stake (u)": 1.00,
-        Result: "Pending", Note: ""
+        Result: "Pending", Freebet: "Yes", Note: "Freebet example"
       },
     ];
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -419,6 +419,7 @@ const parseCSV = (text) => {
       stakeU: parseNum(g("stake (u)", "stake(u)", "stakeu", "stake(u)")) || 0,
       result: result || "",
       note: g("note") || "",
+      isFreebet: ["yes", "oui", "true", "1"].includes((g("freebet", "is_freebet", "freebets") || "").toLowerCase()),
     };
   }).filter((b) => b && b.bet);
 };
@@ -448,6 +449,7 @@ const exportXLSX = (bets) => {
         Result: b.result,
         "Profit (€)": stakeE > 0 ? profitE : "",
         "Profit (u)": stakeU > 0 ? profitU : "",
+        Freebet: (b.isFreebet || b.is_freebet) ? "Yes" : "No",
         Note: b.note ?? "",
       };
     });
@@ -976,11 +978,11 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
       <button
         onClick={() => set("isFreebet", !form.isFreebet)}
         style={{
-          display: "flex", alignItems: "center", gap: 8,
-          background: form.isFreebet ? "#7c3aed22" : "transparent",
-          border: `1px solid ${form.isFreebet ? "#7c3aed" : T.border}`,
-          borderRadius: 8, padding: "7px 12px", cursor: "pointer", width: "100%",
-          transition: "all .15s",
+          display: "flex", alignItems: "center", gap: 10,
+          background: form.isFreebet ? "#7c3aed18" : T.card2,
+          border: `1px solid ${form.isFreebet ? "#7c3aed60" : T.border}`,
+          borderRadius: 8, padding: "8px 12px", cursor: "pointer", width: "100%",
+          transition: "all .2s",
         }}
       >
         <div style={{
@@ -995,12 +997,17 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
             transition: "left .2s",
           }} />
         </div>
-        <span style={{ fontSize: 12, fontWeight: 600, color: form.isFreebet ? "#7c3aed" : T.text2 }}>
-          {form.isFreebet ? "🎁 Freebet" : "💵 Cash"}
-        </span>
-        {form.isFreebet && (
-          <span style={{ fontSize: 10, color: "#7c3aed99", marginLeft: "auto" }}>Win = (cote−1)×mise · Lose = 0€</span>
-        )}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: form.isFreebet ? "#7c3aed" : T.text2, letterSpacing: 0.3 }}>
+            {form.isFreebet ? "Freebet" : "Cash"}
+          </span>
+          {form.isFreebet && (
+            <span style={{ fontSize: 9, color: "#7c3aed88", letterSpacing: 0.2 }}>Win = (cote−1)×mise · Lose = 0</span>
+          )}
+        </div>
+        <div style={{ marginLeft: "auto", fontSize: 11, color: form.isFreebet ? "#7c3aed" : T.text3, fontWeight: 600 }}>
+          {form.isFreebet ? "FB" : "CASH"}
+        </div>
       </button>
 
       {/* Result */}
@@ -1333,7 +1340,7 @@ function BetCard({ bet, onEdit, onDelete, onUpdateResult }) {
             {bet.league && <Tag>{bet.league}</Tag>}
             {(bet.subCat || bet.subcat) && <Tag>{bet.subCat || bet.subcat}</Tag>}
             <Tag color={RESULT_COLORS[bet.result]}>{bet.result}</Tag>
-            {(bet.isFreebet || bet.is_freebet) && <Tag color="#7c3aed">🎁 FB</Tag>}
+            {(bet.isFreebet || bet.is_freebet) && <Tag color="#7c3aed">FB</Tag>}
           </div>
           <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, marginBottom: 4, color: T.text, overflow: "hidden", textOverflow: "ellipsis" }}>{bet.bet}</div>
           <div style={{ display: "flex", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
