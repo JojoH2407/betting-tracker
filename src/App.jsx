@@ -123,8 +123,9 @@ const calcProfit = (bet, field = "E") => {
   const stake = field === "E"
     ? Number(bet.stakeE ?? bet.stakee ?? 0)
     : Number(bet.stakeU ?? bet.stakeu ?? 0);
-  if (bet.result === "Win") return (Number(bet.odd) - 1) * stake;
-  if (bet.result === "Lose") return -stake;
+  const isFB = bet.isFreebet ?? bet.is_freebet ?? false;
+  if (bet.result === "Win") return (Number(bet.odd) - 1) * stake; // same for freebet: only net gain
+  if (bet.result === "Lose") return isFB ? 0 : -stake; // freebet loss = 0 impact
   return 0;
 };
 
@@ -493,6 +494,7 @@ export default function App() {
         subCat: b.subcat ?? "",
         stakeE: Number(b.stakee ?? 0),
         stakeU: Number(b.stakeu ?? 0),
+        isFreebet: b.is_freebet ?? false,
       })));
       if (betsError) console.error("Bets load error:", betsError);
       // Load bankroll from Supabase settings table
@@ -521,7 +523,7 @@ export default function App() {
     if (editId !== null) {
       const f = valid[0];
       const stakeU = unitValue ? (Number(f.stakeE) / unitValue).toFixed(2) : f.stakeU;
-      const entry = { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "" };
+      const entry = { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false };
       const { error } = await supabase.from("bets").update(entry).eq("id", editId);
       if (!error) setBets(bets.map((b) => (b.id === editId ? { ...entry, id: editId } : b)));
       else alert("Error saving: " + error.message);
@@ -529,10 +531,10 @@ export default function App() {
     } else {
       const newEntries = valid.map((f, i) => {
         const stakeU = unitValue ? (Number(f.stakeE ?? f.stakee) / unitValue).toFixed(2) : (f.stakeU ?? f.stakeu ?? 1);
-        return { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "" };
+        return { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false };
       });
       const { data, error } = await supabase.from("bets").insert(newEntries).select();
-      if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0) })), ...bets]);
+      if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0), isFreebet: b.is_freebet ?? false })), ...bets]);
       else alert("Error saving: " + error.message);
     }
     setBatchForms([emptyBetForm()]);
@@ -555,6 +557,7 @@ export default function App() {
       stakeE: Number(bet.stakeE ?? bet.stakee ?? 0),
       stakeU: Number(bet.stakeU ?? bet.stakeu ?? 0),
       odd: Number(bet.odd ?? 0),
+      isFreebet: bet.isFreebet ?? bet.is_freebet ?? false,
     }]);
     setEditId(bet.id);
     setTab("add");
@@ -704,6 +707,7 @@ export default function App() {
         subcat: rest.subCat ?? rest.subcat ?? "", bet: rest.bet, odd: Number(rest.odd),
         stakee: Number(rest.stakeE ?? rest.stakee), stakeu: Number(rest.stakeU ?? rest.stakeu),
         result: rest.result || "", note: rest.note ?? "",
+        is_freebet: rest.isFreebet ?? false,
       }));
       const { data, error } = await supabase.from("bets").insert(toInsert).select();
       if (data) { setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0) })), ...bets]); alert(`✅ ${data.length} bets imported!`); }
@@ -889,6 +893,7 @@ const emptyBetForm = (base = {}) => ({
   stakeU: base.stakeU ?? "",
   result: "Pending",
   note: "",
+  isFreebet: false,
 });
 
 function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
@@ -966,6 +971,37 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
           }
         </div>
       </div>
+
+      {/* Freebet toggle */}
+      <button
+        onClick={() => set("isFreebet", !form.isFreebet)}
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          background: form.isFreebet ? "#7c3aed22" : "transparent",
+          border: `1px solid ${form.isFreebet ? "#7c3aed" : T.border}`,
+          borderRadius: 8, padding: "7px 12px", cursor: "pointer", width: "100%",
+          transition: "all .15s",
+        }}
+      >
+        <div style={{
+          width: 32, height: 18, borderRadius: 9,
+          background: form.isFreebet ? "#7c3aed" : T.border2,
+          position: "relative", transition: "background .2s", flexShrink: 0,
+        }}>
+          <div style={{
+            width: 14, height: 14, borderRadius: "50%", background: "#fff",
+            position: "absolute", top: 2,
+            left: form.isFreebet ? 16 : 2,
+            transition: "left .2s",
+          }} />
+        </div>
+        <span style={{ fontSize: 12, fontWeight: 600, color: form.isFreebet ? "#7c3aed" : T.text2 }}>
+          {form.isFreebet ? "🎁 Freebet" : "💵 Cash"}
+        </span>
+        {form.isFreebet && (
+          <span style={{ fontSize: 10, color: "#7c3aed99", marginLeft: "auto" }}>Win = (cote−1)×mise · Lose = 0€</span>
+        )}
+      </button>
 
       {/* Result */}
       <div>
@@ -1138,7 +1174,7 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
   const filtered = bets
     .filter(b => sportFilter === "All" || b.sport === sportFilter)
     .filter(b => statusFilter === "All" || b.result === statusFilter)
-    .filter(b => !search || b.bet?.toLowerCase().includes(search.toLowerCase()) || b.league?.toLowerCase().includes(search.toLowerCase()));
+    .filter(b => !search || b.bet?.toLowerCase().includes(search.toLowerCase()) || b.league?.toLowerCase().includes(search.toLowerCase()) || (b.subCat ?? b.subcat ?? '').toLowerCase().includes(search.toLowerCase()));
   
   const sorted = [...filtered].sort((a, b) => {
     // 1. Date desc
@@ -1297,6 +1333,7 @@ function BetCard({ bet, onEdit, onDelete, onUpdateResult }) {
             {bet.league && <Tag>{bet.league}</Tag>}
             {(bet.subCat || bet.subcat) && <Tag>{bet.subCat || bet.subcat}</Tag>}
             <Tag color={RESULT_COLORS[bet.result]}>{bet.result}</Tag>
+            {(bet.isFreebet || bet.is_freebet) && <Tag color="#7c3aed">🎁 FB</Tag>}
           </div>
           <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, marginBottom: 4, color: T.text, overflow: "hidden", textOverflow: "ellipsis" }}>{bet.bet}</div>
           <div style={{ display: "flex", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
@@ -1352,11 +1389,11 @@ function StatsTab({ total, bySport, byLeague, bySubCat, maxProfitAbs, bkChartDat
   const openBkEdit = (mk) => {
     setBkEdit(mk);
     const bk = bankroll[mk] ?? {};
-    setBkForm({ start: bk.start ?? "", end: bk.end ?? "", unitValue: bk.unitValue ?? "", fees: bk.fees ?? "" });
+    setBkForm({ start: bk.start ?? "", end: bk.end ?? "", unitValue: bk.unitValue ?? "", fees: bk.fees ?? "", freebetStart: bk.freebetStart ?? "" });
   };
   const saveBk = () => {
-    const entry = { start: Number(bkForm.start), end: Number(bkForm.end), unitValue: Number(bkForm.unitValue), fees: Number(bkForm.fees) };
-    const isEmpty = [bkForm.start, bkForm.end, bkForm.unitValue, bkForm.fees].every(v => v === "" || v === "0" || Number(v) === 0);
+    const entry = { start: Number(bkForm.start), end: Number(bkForm.end), unitValue: Number(bkForm.unitValue), fees: Number(bkForm.fees), freebetStart: Number(bkForm.freebetStart) };
+    const isEmpty = [bkForm.start, bkForm.end, bkForm.unitValue, bkForm.fees, bkForm.freebetStart].every(v => v === "" || v === "0" || Number(v) === 0);
     if (isEmpty) {
       const next = { ...bankroll };
       delete next[bkEdit];
@@ -1547,6 +1584,12 @@ function StatsTab({ total, bySport, byLeague, bySubCat, maxProfitAbs, bkChartDat
                     <div style={{ color: T.text2 }}>End: <b style={{ color: T.text }}>{bk.end ? bk.end.toLocaleString() + "€" : "–"}</b></div>
                     <div style={{ color: T.text2 }}>1u = <b style={{ color: T.accent }}>{bk.unitValue ? bk.unitValue + "€" : "–"}</b></div>
                     <div style={{ color: T.text2 }}>Delta: <b style={{ color: T.lose }}>{bk.fees ? "-" + bk.fees + "€" : "–"}</b></div>
+                    {bk.freebetStart > 0 && (
+                      <div style={{ color: T.text2, gridColumn: "1 / -1", marginTop: 4, paddingTop: 4, borderTop: `1px solid ${T.border}` }}>
+                        🎁 Freebets <b style={{ color: "#7c3aed" }}>{(bk.freebetStart - bets.filter(b => (b.isFreebet || b.is_freebet) && monthKey(b.date) === mk).reduce((a, b) => a + Number(b.stakeE ?? b.stakee ?? 0), 0)).toFixed(2)}€</b>
+                        <span style={{ color: T.text3, fontSize: 10 }}> / {bk.freebetStart}€ initial</span>
+                      </div>
+                    )}
                   </div>
                   {running !== null && (
                     <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1647,7 +1690,7 @@ function StatsTab({ total, bySport, byLeague, bySubCat, maxProfitAbs, bkChartDat
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
           <div style={{ background: T.card2, borderRadius: 16, padding: 24, margin: 20, border: `1px solid ${T.border2}`, maxWidth: 340, width: "100%" }}>
             <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Bankroll — {monthLabel(bkEdit)}</div>
-            {[["start", "Starting bankroll (€)"], ["end", "End bankroll (€)"], ["unitValue", "1 unit = (€)"], ["fees", "Delta (€)"]].map(([k, lbl]) => (
+            {[["start", "Starting bankroll (€)"], ["end", "End bankroll (€)"], ["unitValue", "1 unit = (€)"], ["fees", "Delta (€)"], ["freebetStart", "🎁 Freebets initial (€)"]].map(([k, lbl]) => (
               <div key={k} style={{ marginBottom: 12 }}>
                 <Input label={lbl} type="number" value={bkForm[k]} onChange={(e) => setBkForm((f) => ({ ...f, [k]: e.target.value }))} />
               </div>
