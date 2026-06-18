@@ -801,7 +801,7 @@ export default function App() {
             {tab !== "add" && (
               <div>
                 {tab === "list" && <ListTab bets={filtered} onEdit={startEdit} onDelete={setDeleteConfirm} onUpdateResult={handleUpdateResult} onExport={() => exportXLSX(bets)} onImport={handleCSVImport} filterMonth={filterMonth} scrollToDate={scrollToDate} onScrollDone={() => setScrollToDate(null)} onDeleteAll={() => { if (filterMonth === "all") { supabase.from("bets").delete().neq("id","00000000-0000-0000-0000-000000000000").then(() => setBets([])); } else { const ids = bets.filter(b => monthKey(b.date) === filterMonth).map(b => b.id); supabase.from("bets").delete().in("id", ids).then(() => setBets(bets.filter(b => monthKey(b.date) !== filterMonth))); }}} />}
-                {tab === "stats" && <StatsTab total={total} bySport={bySport} byLeague={byLeague} maxProfitAbs={maxProfitAbs} bkChartData={bkChartData} bankroll={bankroll} updateBankroll={updateBankroll} allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab} bets={bets} dailyChartData={dailyChartData} oddsRanges={oddsRanges} filterMonth={filterMonth} />}
+                {tab === "stats" && <StatsTab total={total} bySport={bySport} byLeague={byLeague} maxProfitAbs={maxProfitAbs} bkChartData={bkChartData} bankroll={bankroll} updateBankroll={updateBankroll} allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab} bets={bets} dailyChartData={dailyChartData} oddsRanges={oddsRanges} filterMonth={filterMonth} bySubCat={bySubCat} />}
               </div>
             )}
             {tab === "add" && <div style={{ color: T.text3, textAlign: "center", padding: 40 }}>Filling form on the left →</div>}
@@ -838,7 +838,7 @@ export default function App() {
               bankroll={bankroll} updateBankroll={updateBankroll}
               allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab}
               bets={bets} dailyChartData={dailyChartData} oddsRanges={oddsRanges}
-              filterMonth={filterMonth} />
+              filterMonth={filterMonth} bySubCat={bySubCat} />
           )}
         </div>
       )}
