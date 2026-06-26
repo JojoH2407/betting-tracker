@@ -68,6 +68,7 @@ const SPORTS_CONFIG = {
 };
 
 const SPORTS = Object.keys(SPORTS_CONFIG);
+const BOOKS = ["PS3838", "Betclic", "Unibet", "Winamax", "Autre"];
 const RESULTS = ["Pending", "Win", "Lose", "Void"];
 
 const RESULT_COLORS = {
@@ -124,8 +125,10 @@ const calcProfit = (bet, field = "E") => {
     ? Number(bet.stakeE ?? bet.stakee ?? 0)
     : Number(bet.stakeU ?? bet.stakeu ?? 0);
   const isFB = bet.isFreebet ?? bet.is_freebet ?? false;
-  if (bet.result === "Win") return (Number(bet.odd) - 1) * stake; // same for freebet: only net gain
-  if (bet.result === "Lose") return isFB ? 0 : -stake; // freebet loss = 0 impact
+  const booster = Number(bet.comboBooster ?? bet.combo_booster ?? 0);
+  const boostMult = 1 + booster / 100;
+  if (bet.result === "Win") return (Number(bet.odd) - 1) * stake * boostMult;
+  if (bet.result === "Lose") return isFB ? 0 : -stake;
   return 0;
 };
 
@@ -315,17 +318,17 @@ const downloadTemplate = () => {
       {
         Date: "2026-06-12", Sport: "Tennis", League: "ATP", "Sub-cat": "ML",
         Bet: "Djokovic vs Alcaraz ML", Odd: 2.10, "Stake (€)": 60, "Stake (u)": 1.00,
-        Result: "Win", Freebet: "No", Note: ""
+        Result: "Win", Book: "PS3838", Freebet: "No", Note: ""
       },
       {
         Date: "2026-06-12", Sport: "Baseball", League: "MLB", "Sub-cat": "Player Props",
         Bet: "Yankees vs Red Sox - Judge HR", Odd: 4.50, "Stake (€)": 15, "Stake (u)": 0.25,
-        Result: "Lose", Freebet: "No", Note: "Example note"
+        Result: "Lose", Book: "Betclic", Freebet: "No", Note: "Example note"
       },
       {
         Date: "2026-06-12", Sport: "Football", League: "BPL", "Sub-cat": "AH",
         Bet: "Arsenal vs Chelsea AH -0.5", Odd: 1.95, "Stake (€)": 60, "Stake (u)": 1.00,
-        Result: "Pending", Freebet: "Yes", Note: "Freebet example"
+        Result: "Pending", Book: "Unibet", Freebet: "Yes", Note: "Freebet example"
       },
     ];
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -420,6 +423,7 @@ const parseCSV = (text) => {
       result: result || "",
       note: g("note") || "",
       isFreebet: ["yes", "oui", "true", "1"].includes((g("freebet", "is_freebet", "freebets") || "").toLowerCase()),
+      book: g("book", "bookmaker", "Book", "Bookmaker") || "",
     };
   }).filter((b) => b && b.bet);
 };
@@ -449,6 +453,7 @@ const exportXLSX = (bets) => {
         Result: b.result,
         "Profit (€)": stakeE > 0 ? profitE : "",
         "Profit (u)": stakeU > 0 ? profitU : "",
+        Book: b.book ?? "",
         Freebet: (b.isFreebet || b.is_freebet) ? "Yes" : "No",
         Note: b.note ?? "",
       };
@@ -497,6 +502,8 @@ export default function App() {
         stakeE: Number(b.stakee ?? 0),
         stakeU: Number(b.stakeu ?? 0),
         isFreebet: b.is_freebet ?? false,
+        comboBooster: Number(b.combo_booster ?? 0),
+        book: b.book ?? "",
       })));
       if (betsError) console.error("Bets load error:", betsError);
       // Load bankroll from Supabase settings table
@@ -525,7 +532,7 @@ export default function App() {
     if (editId !== null) {
       const f = valid[0];
       const stakeU = unitValue ? (Number(f.stakeE) / unitValue).toFixed(2) : f.stakeU;
-      const entry = { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false };
+      const entry = { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), book: f.book ?? "" };
       const { error } = await supabase.from("bets").update(entry).eq("id", editId);
       if (!error) setBets(bets.map((b) => (b.id === editId ? { ...entry, id: editId } : b)));
       else alert("Error saving: " + error.message);
@@ -533,7 +540,7 @@ export default function App() {
     } else {
       const newEntries = valid.map((f, i) => {
         const stakeU = unitValue ? (Number(f.stakeE ?? f.stakee) / unitValue).toFixed(2) : (f.stakeU ?? f.stakeu ?? 1);
-        return { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false };
+        return { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0) };
       });
       const { data, error } = await supabase.from("bets").insert(newEntries).select();
       if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0), isFreebet: b.is_freebet ?? false })), ...bets]);
@@ -560,6 +567,8 @@ export default function App() {
       stakeU: Number(bet.stakeU ?? bet.stakeu ?? 0),
       odd: Number(bet.odd ?? 0),
       isFreebet: bet.isFreebet ?? bet.is_freebet ?? false,
+      comboBooster: Number(bet.comboBooster ?? bet.combo_booster ?? 0) || "",
+      book: bet.book ?? "",
     }]);
     setEditId(bet.id);
     setTab("add");
@@ -586,13 +595,14 @@ export default function App() {
       let k;
       if (key === "league") k = b.league || b.sport || "–";
       else if (key === "subCat") k = b.subCat || b.subcat || "–";
+      else if (key === "book") k = b.book || "Unknown";
       else k = b[key] || "–";
       if (!map[k]) map[k] = { bets: [], wins: 0, profitE: 0, profitU: 0, totalInvE: 0, totalInvU: 0, oddsSum: 0, oddsCount: 0 };
       const s = map[k];
       s.bets.push(b);
       if (b.result === "Win") { s.wins++; s.profitE += calcProfit(b, "E"); s.profitU += calcProfit(b, "U"); }
       else if (b.result === "Lose") { s.profitE += calcProfit(b, "E"); s.profitU += calcProfit(b, "U"); }
-      if (b.result !== "Void" && b.result !== "Pending") {
+      if (b.result !== "Void") {
         s.totalInvE += Number(b.stakeE ?? b.stakee ?? 0);
         s.totalInvU += Number(b.stakeU ?? b.stakeu ?? 0);
       }
@@ -605,7 +615,12 @@ export default function App() {
   const byLeague = useMemo(() => groupStats(filtered, "league"), [filtered]);
   const bySubCat = useMemo(() => {
     const map = groupStats(filtered, "subCat");
-    // Remove empty subCat entries
+    delete map["–"];
+    return map;
+  }, [filtered]);
+
+  const byBook = useMemo(() => {
+    const map = groupStats(filtered, "book");
     delete map["–"];
     return map;
   }, [filtered]);
@@ -616,7 +631,7 @@ export default function App() {
       if (b.result !== "Void" && b.result !== "Pending") settled++;
       if (b.result === "Win") { wins++; profitE += calcProfit(b, "E"); profitU += calcProfit(b, "U"); }
       else if (b.result === "Lose") { profitE += calcProfit(b, "E"); profitU += calcProfit(b, "U"); }
-      if (b.result !== "Void" && b.result !== "Pending") {
+      if (b.result !== "Void") {
         totalInvE += Number(b.stakeE ?? b.stakee ?? 0);
         totalInvU += Number(b.stakeU ?? b.stakeu ?? 0);
       }
@@ -807,7 +822,7 @@ export default function App() {
             {tab !== "add" && (
               <div>
                 {tab === "list" && <ListTab bets={filtered} onEdit={startEdit} onDelete={setDeleteConfirm} onUpdateResult={handleUpdateResult} onExport={() => exportXLSX(bets)} onImport={handleCSVImport} filterMonth={filterMonth} scrollToDate={scrollToDate} onScrollDone={() => setScrollToDate(null)} onDeleteAll={() => { if (filterMonth === "all") { supabase.from("bets").delete().neq("id","00000000-0000-0000-0000-000000000000").then(() => setBets([])); } else { const ids = bets.filter(b => monthKey(b.date) === filterMonth).map(b => b.id); supabase.from("bets").delete().in("id", ids).then(() => setBets(bets.filter(b => monthKey(b.date) !== filterMonth))); }}} />}
-                {tab === "stats" && <StatsTab total={total} bySport={bySport} byLeague={byLeague} maxProfitAbs={maxProfitAbs} bkChartData={bkChartData} bankroll={bankroll} updateBankroll={updateBankroll} allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab} bets={bets} dailyChartData={dailyChartData} oddsRanges={oddsRanges} filterMonth={filterMonth} bySubCat={bySubCat} />}
+                {tab === "stats" && <StatsTab total={total} bySport={bySport} byLeague={byLeague} maxProfitAbs={maxProfitAbs} bkChartData={bkChartData} bankroll={bankroll} updateBankroll={updateBankroll} allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab} bets={bets} dailyChartData={dailyChartData} oddsRanges={oddsRanges} filterMonth={filterMonth} bySubCat={bySubCat} byBook={byBook} />}
               </div>
             )}
             {tab === "add" && <div style={{ color: T.text3, textAlign: "center", padding: 40 }}>Filling form on the left →</div>}
@@ -844,7 +859,7 @@ export default function App() {
               bankroll={bankroll} updateBankroll={updateBankroll}
               allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab}
               bets={bets} dailyChartData={dailyChartData} oddsRanges={oddsRanges}
-              filterMonth={filterMonth} bySubCat={bySubCat} />
+              filterMonth={filterMonth} bySubCat={bySubCat} byBook={byBook} />
           )}
         </div>
       )}
@@ -896,6 +911,8 @@ const emptyBetForm = (base = {}) => ({
   result: "Pending",
   note: "",
   isFreebet: false,
+  comboBooster: "",
+  book: base.book ?? "PS3838",
 });
 
 function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
@@ -956,6 +973,14 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
           </div>
         </div>
       )}
+
+      {/* Book */}
+      <div>
+        <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Book <span style={{ color: T.lose, fontSize: 8 }}>*</span></div>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+          {BOOKS.map((b) => <Chip key={b} label={b} active={form.book === b} onClick={() => set("book", b)} />)}
+        </div>
+      </div>
 
       {/* Bet description */}
       <Input placeholder="e.g. Djokovic vs Alcaraz ML" value={form.bet} onChange={(e) => set("bet", e.target.value)} />
@@ -1312,13 +1337,57 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
         </div>
       )}
 
-      {/* Weeks */}
-      {weekEntries.map(([wk, { bets: wBets, dates }]) => {
-        const sortedDates = [...dates].sort((a, b) => b.localeCompare(a));
-        return (
-          <WeekGroup key={wk} weekLabel={weekLabel(wk)} days={sortedDates} bets={wBets} onEdit={onEdit} onDelete={onDelete} onUpdateResult={onUpdateResult} />
-        );
-      })}
+      {/* Weeks — with month separators when showing all time */}
+      {(() => {
+        let currentMonth = null;
+        const elements = [];
+        
+        weekEntries.forEach(([wk, { bets: wBets, dates }]) => {
+          // Determine month of this week (use first date)
+          const sortedDates = [...dates].sort((a, b) => b.localeCompare(a));
+          const weekMonth = monthKey(sortedDates[0]);
+          
+          // Add month separator when month changes (only in "all" view or when multiple months)
+          if (weekMonth !== currentMonth) {
+            if (currentMonth !== null || filterMonth === "all") {
+              // Calculate month profit
+              const monthBets = sorted.filter(b => monthKey(b.date) === weekMonth);
+              const monthProfitE = monthBets.reduce((a, b) => a + calcProfit(b, "E"), 0);
+              const monthProfitU = monthBets.reduce((a, b) => a + calcProfit(b, "U"), 0);
+              const hasSettled = monthBets.some(b => b.result !== "Pending" && b.result !== "Void");
+              
+              elements.push(
+                <div key={`month-${weekMonth}`} style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  margin: "8px 0 6px", 
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: T.accent, letterSpacing: 2, textTransform: "uppercase", whiteSpace: "nowrap" }}>
+                    {monthLabel(weekMonth)}
+                  </div>
+                  <div style={{ flex: 1, height: 1, background: T.border }} />
+                  {hasSettled && (
+                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: monthProfitE >= 0 ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>
+                        {fmt(monthProfitE)}€
+                      </span>
+                      <span style={{ fontSize: 10, color: monthProfitU >= 0 ? T.win + "88" : T.lose + "88", fontVariantNumeric: "tabular-nums" }}>
+                        {fmt(monthProfitU)}u
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            currentMonth = weekMonth;
+          }
+          
+          elements.push(
+            <WeekGroup key={wk} weekLabel={weekLabel(wk)} days={sortedDates} bets={wBets} onEdit={onEdit} onDelete={onDelete} onUpdateResult={onUpdateResult} />
+          );
+        });
+        
+        return elements;
+      })()}
     </div>
   );
 }
@@ -1340,6 +1409,7 @@ function BetCard({ bet, onEdit, onDelete, onUpdateResult }) {
             {bet.league && <Tag>{bet.league}</Tag>}
             {(bet.subCat || bet.subcat) && <Tag>{bet.subCat || bet.subcat}</Tag>}
             <Tag color={RESULT_COLORS[bet.result]}>{bet.result}</Tag>
+            {bet.book && <Tag color={T.text3}>{bet.book}</Tag>}
             {(bet.isFreebet || bet.is_freebet) && <Tag color="#7c3aed">FB</Tag>}
           </div>
           <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, marginBottom: 4, color: T.text, overflow: "hidden", textOverflow: "ellipsis" }}>{bet.bet}</div>
@@ -1388,7 +1458,7 @@ function BetCard({ bet, onEdit, onDelete, onUpdateResult }) {
 // ════════════════════════════════════════════════════════════════════════════════
 // STATS TAB
 // ════════════════════════════════════════════════════════════════════════════════
-function StatsTab({ total, bySport, byLeague, bySubCat, maxProfitAbs, bkChartData, bankroll, updateBankroll, allMonths, statsTab, setStatsTab, bets, dailyChartData, oddsRanges, filterMonth }) {
+function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bkChartData, bankroll, updateBankroll, allMonths, statsTab, setStatsTab, bets, dailyChartData, oddsRanges, filterMonth }) {
   const [bkEdit, setBkEdit] = useState(null);
   const [showShare, setShowShare] = useState(false);
   const [bkForm, setBkForm] = useState({ start: "", end: "", unitValue: "", fees: "" });
@@ -1483,7 +1553,7 @@ function StatsTab({ total, bySport, byLeague, bySubCat, maxProfitAbs, bkChartDat
 
       {/* SUB-TABS */}
       <div style={{ display: "flex", gap: 8, borderBottom: `1px solid ${T.border}`, paddingBottom: 12, overflowX: "auto" }}>
-        {[["bk", "Bankroll"], ["sport", "By Sport"], ["league", "By League"], ["subcat", "By Type"]].map(([k, l]) => (
+        {[["bk", "Bankroll"], ["sport", "By Sport"], ["league", "By League"], ["subcat", "By Type"], ["book", "By Book"]].map(([k, l]) => (
           <button key={k} onClick={() => setStatsTab(k)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, color: statsTab === k ? T.accent : T.text3, borderBottom: statsTab === k ? `2px solid ${T.accent}` : "2px solid transparent", paddingBottom: 4, whiteSpace: "nowrap" }}>{l}</button>
         ))}
       </div>
@@ -1530,6 +1600,50 @@ function StatsTab({ total, bySport, byLeague, bySubCat, maxProfitAbs, bkChartDat
             ? renderGroup(bySubCat, Math.max(...Object.values(bySubCat).map((s) => Math.abs(s.profitE)), 1))
             : <div style={{ color: T.text3, textAlign: "center", padding: 20 }}>No data</div>
           }
+        </div>
+      )}
+
+      {statsTab === "book" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Stats by book */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {Object.keys(byBook).length > 0
+              ? Object.entries(byBook).map(([name, s]) => {
+                  const settled = s.bets.filter(b => b.result !== "Void" && b.result !== "Pending").length;
+                  const wr = settled ? (s.wins / settled) * 100 : 0;
+                  const roi = s.totalInvE ? (s.profitE / s.totalInvE) * 100 : 0;
+                  const bookBK = bankroll[`book_${name}`] ?? {};
+                  const running = bookBK.start ? bookBK.start + s.profitE : null;
+                  return (
+                    <div key={name} style={{ background: T.card, borderRadius: 12, padding: "14px", border: `1px solid ${T.border}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                        <div style={{ fontWeight: 800, fontSize: 15, color: T.text }}>{name}</div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <span style={{ fontSize: 15, fontWeight: 800, color: s.profitE >= 0 ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>{fmt(s.profitE)}€</span>
+                          <button onClick={() => { setBkEdit(`book_${name}`); setBkForm({ start: bookBK.start ?? "", end: "", unitValue: "", fees: "", freebetStart: "" }); }} style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "3px 10px", color: T.accent, fontSize: 11, cursor: "pointer" }}>Edit BK</button>
+                        </div>
+                      </div>
+                      <div style={{ height: 4, background: T.card2, borderRadius: 3, marginBottom: 10, overflow: "hidden" }}>
+                        <div style={{ width: `${Math.min(Math.abs(s.profitE) / Math.max(...Object.values(byBook).map(x => Math.abs(x.profitE)), 1) * 100, 100)}%`, height: "100%", background: s.profitE >= 0 ? T.win : T.lose, borderRadius: 3 }} />
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, fontSize: 11 }}>
+                        <div><div style={{ color: T.text, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{s.bets.length}</div><div style={{ color: T.text3 }}>Bets</div></div>
+                        <div><div style={{ color: T.text, fontWeight: 700 }}>{fmtAbs(wr)}%</div><div style={{ color: T.text3 }}>Win %</div></div>
+                        <div><div style={{ color: roi >= 0 ? T.win : T.lose, fontWeight: 700 }}>{fmt(roi)}%</div><div style={{ color: T.text3 }}>ROI</div></div>
+                        <div><div style={{ color: T.text, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmt(s.profitU)}u</div><div style={{ color: T.text3 }}>Profit u</div></div>
+                      </div>
+                      {bookBK.start && (
+                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between" }}>
+                          <div style={{ fontSize: 11, color: T.text3 }}>Start: <b style={{ color: T.text }}>{bookBK.start}€</b></div>
+                          <div style={{ fontSize: 11, color: T.text3 }}>Running: <b style={{ color: running >= bookBK.start ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>{running?.toFixed(2)}€</b></div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              : <div style={{ color: T.text3, textAlign: "center", padding: 20 }}>No bets with book assigned yet</div>
+            }
+          </div>
         </div>
       )}
 
