@@ -477,6 +477,7 @@ export default function App() {
   const [bets, setBets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [bankroll, setBankrollState] = useState({});
+  const [bookConfig, setBookConfigState] = useState({}); // { PS3838: { start: 1000, movements: [{date, type, amount, note}] } }
   const [editId, setEditId] = useState(null);
   const [filterMonth, setFilterMonth] = useState(monthKey(today()));
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -511,9 +512,13 @@ export default function App() {
       if (settingsData?.value) {
         try { setBankrollState(JSON.parse(settingsData.value)); } catch {}
       } else {
-        // Fallback to localStorage for migration
         const local = load("bankroll_v2", {});
         if (Object.keys(local).length > 0) setBankrollState(local);
+      }
+      // Load book config
+      const { data: bookData } = await supabase.from("settings").select("value").eq("key", "bookConfig").single();
+      if (bookData?.value) {
+        try { setBookConfigState(JSON.parse(bookData.value)); } catch {}
       }
       setLoading(false);
     };
@@ -551,6 +556,11 @@ export default function App() {
     setScrollToDate(targetDate);
     setTab("list");
     setSaving(false);
+  };
+
+  const updateBookConfig = async (next) => {
+    setBookConfigState(next);
+    await supabase.from("settings").upsert({ key: "bookConfig", value: JSON.stringify(next) }, { onConflict: "key" });
   };
 
   const handleUpdateResult = async (bet, result) => {
@@ -822,7 +832,7 @@ export default function App() {
             {tab !== "add" && (
               <div>
                 {tab === "list" && <ListTab bets={filtered} onEdit={startEdit} onDelete={setDeleteConfirm} onUpdateResult={handleUpdateResult} onExport={() => exportXLSX(bets)} onImport={handleCSVImport} filterMonth={filterMonth} scrollToDate={scrollToDate} onScrollDone={() => setScrollToDate(null)} onDeleteAll={() => { if (filterMonth === "all") { supabase.from("bets").delete().neq("id","00000000-0000-0000-0000-000000000000").then(() => setBets([])); } else { const ids = bets.filter(b => monthKey(b.date) === filterMonth).map(b => b.id); supabase.from("bets").delete().in("id", ids).then(() => setBets(bets.filter(b => monthKey(b.date) !== filterMonth))); }}} />}
-                {tab === "stats" && <StatsTab total={total} bySport={bySport} byLeague={byLeague} maxProfitAbs={maxProfitAbs} bkChartData={bkChartData} bankroll={bankroll} updateBankroll={updateBankroll} allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab} bets={bets} dailyChartData={dailyChartData} oddsRanges={oddsRanges} filterMonth={filterMonth} bySubCat={bySubCat} byBook={byBook} />}
+                {tab === "stats" && <StatsTab total={total} bySport={bySport} byLeague={byLeague} maxProfitAbs={maxProfitAbs} bkChartData={bkChartData} bankroll={bankroll} updateBankroll={updateBankroll} allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab} bets={bets} dailyChartData={dailyChartData} oddsRanges={oddsRanges} filterMonth={filterMonth} bySubCat={bySubCat} byBook={byBook} bookConfig={bookConfig} updateBookConfig={updateBookConfig} />}
               </div>
             )}
             {tab === "add" && <div style={{ color: T.text3, textAlign: "center", padding: 40 }}>Filling form on the left →</div>}
@@ -859,7 +869,7 @@ export default function App() {
               bankroll={bankroll} updateBankroll={updateBankroll}
               allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab}
               bets={bets} dailyChartData={dailyChartData} oddsRanges={oddsRanges}
-              filterMonth={filterMonth} bySubCat={bySubCat} byBook={byBook} />
+              filterMonth={filterMonth} bySubCat={bySubCat} byBook={byBook} bookConfig={bookConfig} updateBookConfig={updateBookConfig} />
           )}
         </div>
       )}
@@ -998,6 +1008,27 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
           }
         </div>
       </div>
+
+      {/* Combo Booster - only for Parlay */}
+      {form.subCat === "Parlay" && (
+        <div>
+          <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>
+            Combo Booster % <span style={{ color: T.text3, fontSize: 9, textTransform: "none" }}>(optionnel)</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="number" step="0.1" min="0" max="100"
+              placeholder="0.5"
+              value={form.comboBooster}
+              onChange={(e) => set("comboBooster", e.target.value)}
+              style={{ flex: 1, background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" }}
+            />
+            <div style={{ fontSize: 11, color: T.text3, whiteSpace: "nowrap" }}>
+              {form.comboBooster > 0 ? `+${((Number(form.odd) - 1) * Number(form.stakeE || 0) * Number(form.comboBooster) / 100).toFixed(2)}€ bonus` : "% bonus"}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Freebet toggle */}
       <button
@@ -1455,10 +1486,200 @@ function BetCard({ bet, onEdit, onDelete, onUpdateResult }) {
   );
 }
 
+
+// ════════════════════════════════════════════════════════════════════════════════
+// BOOK TAB
+// ════════════════════════════════════════════════════════════════════════════════
+function BookTab({ byBook, bets, bookConfig, updateBookConfig }) {
+  const [editBook, setEditBook] = useState(null);
+  const [editForm, setEditForm] = useState({ start: "", date: today() });
+  const [movForm, setMovForm] = useState({ type: "deposit", amount: "", date: today(), note: "" });
+  const [showMovForm, setShowMovForm] = useState(null);
+
+  const allBooks = [...new Set([...BOOKS, ...Object.keys(byBook)])].filter(b => b && b !== "Autre" || byBook[b]);
+
+  const getRunning = (book) => {
+    const cfg = bookConfig[book] ?? {};
+    const profit = (byBook[book]?.profitE ?? 0);
+    const movements = cfg.movements ?? [];
+    const netMovements = movements.reduce((a, m) => a + (m.type === "deposit" ? Number(m.amount) : -Number(m.amount)), 0);
+    return (cfg.start ?? 0) + profit + netMovements;
+  };
+
+  const saveBookConfig = (book, updates) => {
+    const next = { ...bookConfig, [book]: { ...(bookConfig[book] ?? {}), ...updates } };
+    updateBookConfig(next);
+  };
+
+  const addMovement = (book) => {
+    if (!movForm.amount) return;
+    const cfg = bookConfig[book] ?? {};
+    const movements = [...(cfg.movements ?? []), { ...movForm, id: Date.now() }];
+    saveBookConfig(book, { movements });
+    setMovForm({ type: "deposit", amount: "", date: today(), note: "" });
+    setShowMovForm(null);
+  };
+
+  const deleteMovement = (book, id) => {
+    const cfg = bookConfig[book] ?? {};
+    const movements = (cfg.movements ?? []).filter(m => m.id !== id);
+    saveBookConfig(book, { movements });
+  };
+
+  const maxAbs = Math.max(...allBooks.map(b => Math.abs(byBook[b]?.profitE ?? 0)), 1);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {allBooks.length === 0 && (
+        <div style={{ color: T.text3, textAlign: "center", padding: 40 }}>
+          Add bets with a book assigned to see stats here
+        </div>
+      )}
+
+      {allBooks.map(book => {
+        const s = byBook[book] ?? { bets: [], wins: 0, profitE: 0, profitU: 0, totalInvE: 0 };
+        const cfg = bookConfig[book] ?? {};
+        const settled = s.bets.filter(b => b.result !== "Void" && b.result !== "Pending").length;
+        const wr = settled ? (s.wins / settled) * 100 : 0;
+        const roi = s.totalInvE ? (s.profitE / s.totalInvE) * 100 : 0;
+        const running = getRunning(book);
+        const hasStart = cfg.start > 0;
+        const movements = cfg.movements ?? [];
+
+        return (
+          <div key={book} style={{ background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, overflow: "hidden" }}>
+            {/* Header */}
+            <div style={{ padding: "14px 14px 12px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ fontWeight: 800, fontSize: 15, color: T.text }}>{book}</div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: s.profitE >= 0 ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>{fmt(s.profitE)}€</span>
+                  <button onClick={() => { setEditBook(book); setEditForm({ start: cfg.start ?? "", date: cfg.date ?? today() }); }}
+                    style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "3px 10px", color: T.accent, fontSize: 11, cursor: "pointer" }}>
+                    Setup
+                  </button>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ height: 4, background: T.card2, borderRadius: 3, marginBottom: 10, overflow: "hidden" }}>
+                <div style={{ width: `${Math.min(Math.abs(s.profitE) / maxAbs * 100, 100)}%`, height: "100%", background: s.profitE >= 0 ? T.win : T.lose, borderRadius: 3 }} />
+              </div>
+
+              {/* Stats grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, fontSize: 11, marginBottom: hasStart ? 10 : 0 }}>
+                <div><div style={{ color: T.text, fontWeight: 700 }}>{s.bets.length}</div><div style={{ color: T.text3 }}>Bets</div></div>
+                <div><div style={{ color: T.text, fontWeight: 700 }}>{fmtAbs(wr)}%</div><div style={{ color: T.text3 }}>Win %</div></div>
+                <div><div style={{ color: roi >= 0 ? T.win : T.lose, fontWeight: 700 }}>{fmt(roi)}%</div><div style={{ color: T.text3 }}>ROI</div></div>
+                <div><div style={{ color: T.text, fontWeight: 700 }}>{fmt(s.profitU)}u</div><div style={{ color: T.text3 }}>Profit u</div></div>
+              </div>
+
+              {/* Running balance */}
+              {hasStart && (
+                <div style={{ background: T.card2, borderRadius: 8, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 11, color: T.text3 }}>
+                    Start: <b style={{ color: T.text }}>{cfg.start}€</b>
+                    {movements.length > 0 && <span style={{ marginLeft: 8 }}>Mvts: <b style={{ color: T.text }}>{movements.reduce((a,m) => a + (m.type==="deposit"?1:-1)*Number(m.amount),0) >= 0 ? "+" : ""}{movements.reduce((a,m) => a + (m.type==="deposit"?1:-1)*Number(m.amount),0).toFixed(0)}€</b></span>}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: running >= cfg.start ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>
+                    {running.toFixed(2)}€
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Movements */}
+            {hasStart && movements.length > 0 && (
+              <div style={{ borderTop: `1px solid ${T.border}`, padding: "8px 14px" }}>
+                {movements.map(m => (
+                  <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", fontSize: 11 }}>
+                    <div style={{ color: T.text3 }}>
+                      <span style={{ marginRight: 6 }}>{m.type === "deposit" ? "↗" : "↘"}</span>
+                      {m.date} {m.note && `· ${m.note}`}
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ color: m.type === "deposit" ? T.win : T.lose, fontWeight: 700 }}>
+                        {m.type === "deposit" ? "+" : "-"}{Number(m.amount).toFixed(2)}€
+                      </span>
+                      <button onClick={() => deleteMovement(book, m.id)} style={{ background: "none", border: "none", color: T.lose + "66", cursor: "pointer", fontSize: 13, padding: 0 }}>×</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add movement button */}
+            {hasStart && (
+              <div style={{ borderTop: `1px solid ${T.border}`, padding: "8px 14px" }}>
+                {showMovForm === book ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => setMovForm(f => ({ ...f, type: "deposit" }))}
+                        style={{ flex: 1, background: movForm.type === "deposit" ? T.win + "22" : T.card2, border: `1px solid ${movForm.type === "deposit" ? T.win : T.border}`, borderRadius: 6, padding: "6px", color: movForm.type === "deposit" ? T.win : T.text2, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                        ↗ Dépôt
+                      </button>
+                      <button onClick={() => setMovForm(f => ({ ...f, type: "withdrawal" }))}
+                        style={{ flex: 1, background: movForm.type === "withdrawal" ? T.lose + "22" : T.card2, border: `1px solid ${movForm.type === "withdrawal" ? T.lose : T.border}`, borderRadius: 6, padding: "6px", color: movForm.type === "withdrawal" ? T.lose : T.text2, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                        ↘ Retrait
+                      </button>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                      <input type="number" placeholder="Montant €" value={movForm.amount} onChange={e => setMovForm(f => ({ ...f, amount: e.target.value }))}
+                        style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px 10px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                      <input type="date" value={movForm.date} onChange={e => setMovForm(f => ({ ...f, date: e.target.value }))}
+                        style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px 10px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                    </div>
+                    <input placeholder="Note (optionnel)" value={movForm.note} onChange={e => setMovForm(f => ({ ...f, note: e.target.value }))}
+                      style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px 10px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box", width: "100%" }} />
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => setShowMovForm(null)} style={{ flex: 1, background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px", color: T.text2, fontSize: 12, cursor: "pointer" }}>Annuler</button>
+                      <button onClick={() => addMovement(book)} style={{ flex: 2, background: T.accent, border: "none", borderRadius: 6, padding: "8px", color: T.bg, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Ajouter</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => setShowMovForm(book)} style={{ width: "100%", background: "transparent", border: `1px dashed ${T.border2}`, borderRadius: 6, padding: "6px", color: T.text3, fontSize: 11, cursor: "pointer" }}>
+                    + Dépôt / Retrait
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Setup book modal */}
+      {editBook && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}>
+          <div style={{ background: T.card, borderRadius: 12, padding: 24, width: "100%", maxWidth: 340, border: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Setup — {editBook}</div>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 6, fontWeight: 600 }}>Solde de départ (€)</div>
+              <input type="number" value={editForm.start} onChange={e => setEditForm(f => ({ ...f, start: e.target.value }))}
+                style={{ width: "100%", background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", color: T.text, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 6, fontWeight: 600 }}>Date de départ</div>
+              <input type="date" value={editForm.date} onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))}
+                style={{ width: "100%", background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", color: T.text, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setEditBook(null)} style={{ flex: 1, background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "11px", color: T.text2, fontSize: 13, cursor: "pointer", fontWeight: 600 }}>Annuler</button>
+              <button onClick={() => { saveBookConfig(editBook, { start: Number(editForm.start), date: editForm.date }); setEditBook(null); }}
+                style={{ flex: 2, background: T.accent, border: "none", borderRadius: 8, padding: "11px", color: T.bg, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+                Sauvegarder
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // STATS TAB
 // ════════════════════════════════════════════════════════════════════════════════
-function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bkChartData, bankroll, updateBankroll, allMonths, statsTab, setStatsTab, bets, dailyChartData, oddsRanges, filterMonth }) {
+function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bkChartData, bankroll, updateBankroll, allMonths, statsTab, setStatsTab, bets, dailyChartData, oddsRanges, filterMonth, bookConfig, updateBookConfig }) {
   const [bkEdit, setBkEdit] = useState(null);
   const [showShare, setShowShare] = useState(false);
   const [bkForm, setBkForm] = useState({ start: "", end: "", unitValue: "", fees: "" });
@@ -1604,47 +1825,7 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
       )}
 
       {statsTab === "book" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Stats by book */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {Object.keys(byBook).length > 0
-              ? Object.entries(byBook).map(([name, s]) => {
-                  const settled = s.bets.filter(b => b.result !== "Void" && b.result !== "Pending").length;
-                  const wr = settled ? (s.wins / settled) * 100 : 0;
-                  const roi = s.totalInvE ? (s.profitE / s.totalInvE) * 100 : 0;
-                  const bookBK = bankroll[`book_${name}`] ?? {};
-                  const running = bookBK.start ? bookBK.start + s.profitE : null;
-                  return (
-                    <div key={name} style={{ background: T.card, borderRadius: 12, padding: "14px", border: `1px solid ${T.border}` }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                        <div style={{ fontWeight: 800, fontSize: 15, color: T.text }}>{name}</div>
-                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                          <span style={{ fontSize: 15, fontWeight: 800, color: s.profitE >= 0 ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>{fmt(s.profitE)}€</span>
-                          <button onClick={() => { setBkEdit(`book_${name}`); setBkForm({ start: bookBK.start ?? "", end: "", unitValue: "", fees: "", freebetStart: "" }); }} style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "3px 10px", color: T.accent, fontSize: 11, cursor: "pointer" }}>Edit BK</button>
-                        </div>
-                      </div>
-                      <div style={{ height: 4, background: T.card2, borderRadius: 3, marginBottom: 10, overflow: "hidden" }}>
-                        <div style={{ width: `${Math.min(Math.abs(s.profitE) / Math.max(...Object.values(byBook).map(x => Math.abs(x.profitE)), 1) * 100, 100)}%`, height: "100%", background: s.profitE >= 0 ? T.win : T.lose, borderRadius: 3 }} />
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, fontSize: 11 }}>
-                        <div><div style={{ color: T.text, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{s.bets.length}</div><div style={{ color: T.text3 }}>Bets</div></div>
-                        <div><div style={{ color: T.text, fontWeight: 700 }}>{fmtAbs(wr)}%</div><div style={{ color: T.text3 }}>Win %</div></div>
-                        <div><div style={{ color: roi >= 0 ? T.win : T.lose, fontWeight: 700 }}>{fmt(roi)}%</div><div style={{ color: T.text3 }}>ROI</div></div>
-                        <div><div style={{ color: T.text, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmt(s.profitU)}u</div><div style={{ color: T.text3 }}>Profit u</div></div>
-                      </div>
-                      {bookBK.start && (
-                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between" }}>
-                          <div style={{ fontSize: 11, color: T.text3 }}>Start: <b style={{ color: T.text }}>{bookBK.start}€</b></div>
-                          <div style={{ fontSize: 11, color: T.text3 }}>Running: <b style={{ color: running >= bookBK.start ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>{running?.toFixed(2)}€</b></div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              : <div style={{ color: T.text3, textAlign: "center", padding: 20 }}>No bets with book assigned yet</div>
-            }
-          </div>
-        </div>
+        <BookTab byBook={byBook} bets={bets} bookConfig={bookConfig} updateBookConfig={updateBookConfig} />
       )}
 
       {statsTab === "bk" && (
