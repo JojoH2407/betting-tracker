@@ -39,32 +39,36 @@ const useWindowWidth = () => {
 // ── SPORTS CONFIG ─────────────────────────────────────────────────────────────
 const SPORTS_CONFIG = {
   Tennis: {
-    leagues: ["ATP", "WTA", "Outright"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay"],
+    leagues: ["ATP", "WTA", "Mixed"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright"],
   },
   Baseball: {
-    leagues: ["MLB", "KBO", "Outright"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay"],
+    leagues: ["MLB", "KBO"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright"],
   },
-  Football: {
-    leagues: ["Ligue 1", "BPL", "Liga", "Serie A", "Bundesliga", "European Cup", "World Cup", "National Cup", "Exhibition", "Outright", "Exotique"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay"],
+  Soccer: {
+    leagues: ["Ligue 1", "BPL", "Liga", "Serie A", "Bundesliga", "European Cup", "World Cup", "National Cup", "Exhibition", "Exotique"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright"],
+  },
+  "US Football": {
+    leagues: ["NFL"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Outright", "Parlay"],
   },
   Basketball: {
-    leagues: ["NBA", "EuroLeague", "Outright", "Autre"],
+    leagues: ["NBA", "EuroLeague", "Autre"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Outright", "Parlay"],
   },
   Hockey: {
-    leagues: ["NHL", "Magnus", "Outright"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay"],
+    leagues: ["NHL", "Magnus"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright"],
   },
   MMA: {
-    leagues: ["UFC", "Outright"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay"],
+    leagues: ["UFC"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright"],
   },
-  eSport: { leagues: ["Outright"], subCats: ["ML", "Boost"] },
-  "F1": { leagues: ["Outright"], subCats: ["Boost"] },
-  Cycling: { leagues: ["Outright"], subCats: ["Boost"] },
+  eSport: { leagues: ["CS2", "LoL", "Autre"], subCats: ["ML", "Boost", "Outright"] },
+  "F1": { leagues: ["F1"], subCats: ["Boost", "Outright"] },
+  Cycling: { leagues: ["Tour de France", "Giro", "Vuelta", "Autre"], subCats: ["Boost", "Outright"] },
 };
 
 const SPORTS = Object.keys(SPORTS_CONFIG);
@@ -326,7 +330,7 @@ const downloadTemplate = () => {
         Result: "Lose", Book: "Betclic", Freebet: "No", Note: "Example note"
       },
       {
-        Date: "2026-06-12", Sport: "Football", League: "BPL", "Sub-cat": "AH",
+        Date: "2026-06-12", Sport: "Soccer", League: "BPL", "Sub-cat": "AH",
         Bet: "Arsenal vs Chelsea AH -0.5", Odd: 1.95, "Stake (€)": 60, "Stake (u)": 1.00,
         Result: "Pending", Book: "Unibet", Freebet: "Yes", Note: "Freebet example"
       },
@@ -384,7 +388,7 @@ const parseCSV = (text) => {
   const headers = parseCSVLine(lines[0], sep).map((h) => h.replace(/"/g, "").toLowerCase().trim());
 
   const resultMap = { win: "Win", lose: "Lose", void: "Void", "": "", pending: "Pending" };
-  const sportMap = { tennis: "Tennis", baseball: "Baseball", mlb: "Baseball", football: "Football", basketball: "Basketball", nba: "Basketball", esport: "eSport", "e-sport": "eSport", f1: "F1", cycling: "Cycling", hockey: "Hockey", nhl: "Hockey", mma: "MMA", ufc: "MMA" };
+  const sportMap = { tennis: "Tennis", baseball: "Baseball", mlb: "Baseball", football: "Soccer", soccer: "Soccer", "us football": "US Football", nfl: "US Football", basketball: "Basketball", nba: "Basketball", esport: "eSport", "e-sport": "eSport", f1: "F1", cycling: "Cycling", hockey: "Hockey", nhl: "Hockey", mma: "MMA", ufc: "MMA" };
 
   return lines.slice(1).map((line) => {
     if (!line.trim()) return null;
@@ -525,9 +529,8 @@ export default function App() {
     fetchAll();
   }, []);
 
-  // unit value from the date of the first form
-  const currentMonthBK = bankroll[monthKey(batchForms[0]?.date ?? today())];
-  const unitValue = currentMonthBK?.unitValue ?? null;
+  // unit value from global bankroll config
+  const unitValue = bankroll.global?.unitValue ?? null;
 
   const handleSaveAll = async () => {
     if (saving) return;
@@ -536,7 +539,7 @@ export default function App() {
     setSaving(true);
     if (editId !== null) {
       const f = valid[0];
-      const stakeU = unitValue ? (Number(f.stakeE) / unitValue).toFixed(2) : f.stakeU;
+      const stakeU = unitValue ? (Number(f.stakeE) / unitValue).toFixed(3) : f.stakeU;
       const entry = { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), book: f.book ?? "" };
       const { error } = await supabase.from("bets").update(entry).eq("id", editId);
       if (!error) setBets(bets.map((b) => (b.id === editId ? { ...entry, id: editId } : b)));
@@ -544,7 +547,7 @@ export default function App() {
       setEditId(null);
     } else {
       const newEntries = valid.map((f, i) => {
-        const stakeU = unitValue ? (Number(f.stakeE ?? f.stakee) / unitValue).toFixed(2) : (f.stakeU ?? f.stakeu ?? 1);
+        const stakeU = unitValue ? (Number(f.stakeE ?? f.stakee) / unitValue).toFixed(3) : (f.stakeU ?? f.stakeu ?? 1);
         return { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0) };
       });
       const { data, error } = await supabase.from("bets").insert(newEntries).select();
@@ -931,7 +934,7 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
   const hasSubCat = cfg.subCats.length > 0;
   const rawStakeE = Number(form.stakeE ?? form.stakee ?? 0);
   const rawU = unitValue && rawStakeE > 0 ? (rawStakeE / unitValue) : null;
-  const computedU = rawU !== null && !isNaN(rawU) ? rawU.toFixed(2) : null;
+  const computedU = rawU !== null && !isNaN(rawU) ? rawU.toFixed(3) : null;
   const manualU = form.stakeU ?? form.stakeu ?? "";
 
   const set = (k, v) => {
@@ -1003,7 +1006,7 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
           <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Stake u</div>
           {computedU
             ? <div style={{ background: T.card2, border: `1px solid ${T.accent}30`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: T.accent, fontWeight: 700 }}>{computedU}u</div>
-            : <input type="number" step="0.25" value={manualU} onChange={(e) => set("stakeU", e.target.value)}
+            : <input type="number" step="0.001" value={manualU} onChange={(e) => set("stakeU", e.target.value)}
                 style={{ width: "100%", background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" }} />
           }
         </div>
@@ -1159,7 +1162,7 @@ function DayGroup({ date, bets, onEdit, onDelete, onUpdateResult, defaultOpen })
     <div id={`day-${date}`}>
       <button onClick={() => setOpen(o => !o)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", marginBottom: open ? 6 : 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 10, color: T.text3, letterSpacing: 2, textTransform: "uppercase", fontWeight: 600 }}>{dateLabel}</span>
+          <span style={{ fontSize: 12, color: T.text2, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 700 }}>{dateLabel}</span>
           <span style={{ fontSize: 10, color: T.text3, background: T.card2, borderRadius: 10, padding: "1px 6px", border: `1px solid ${T.border}` }}>{bets.length}</span>
           <span style={{ fontSize: 10, color: T.text3 }}>{open ? "▾" : "▸"}</span>
         </div>
@@ -1447,7 +1450,7 @@ function BetCard({ bet, onEdit, onDelete, onUpdateResult }) {
           <div style={{ display: "flex", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
             <span style={{ fontSize: 11, color: T.text3, background: T.card2, borderRadius: 4, padding: "1px 6px", fontVariantNumeric: "tabular-nums" }}>@{Number(bet.odd ?? 0).toFixed(3)}</span>
             <span style={{ fontSize: 11, color: T.text2, background: T.card2, borderRadius: 4, padding: "1px 6px", fontVariantNumeric: "tabular-nums" }}>{Number(bet.stakeE ?? bet.stakee ?? 0).toFixed(2).replace(/\.?0+$/, "")}€</span>
-            <span style={{ fontSize: 11, color: T.text2, background: T.card2, borderRadius: 4, padding: "1px 6px", fontVariantNumeric: "tabular-nums" }}>{Number(bet.stakeU ?? bet.stakeu ?? 0).toFixed(2)}u</span>
+            <span style={{ fontSize: 11, color: T.text2, background: T.card2, borderRadius: 4, padding: "1px 6px", fontVariantNumeric: "tabular-nums" }}>{Number(bet.stakeU ?? bet.stakeu ?? 0).toFixed(3)}u</span>
           </div>
           {bet.note && <div style={{ fontSize: 11, color: T.text3, marginTop: 3, fontStyle: "italic" }}>{bet.note}</div>}
           {bet.result === "Pending" && (
@@ -1680,36 +1683,84 @@ function BookTab({ byBook, bets, bookConfig, updateBookConfig }) {
 // STATS TAB
 // ════════════════════════════════════════════════════════════════════════════════
 function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bkChartData, bankroll, updateBankroll, allMonths, statsTab, setStatsTab, bets, dailyChartData, oddsRanges, filterMonth, bookConfig, updateBookConfig }) {
-  const [bkEdit, setBkEdit] = useState(null);
   const [showShare, setShowShare] = useState(false);
-  const [bkForm, setBkForm] = useState({ start: "", end: "", unitValue: "", fees: "" });
 
-  const openBkEdit = (mk) => {
-    setBkEdit(mk);
-    const bk = bankroll[mk] ?? {};
-    setBkForm({ start: bk.start ?? "", end: bk.end ?? "", unitValue: bk.unitValue ?? "", fees: bk.fees ?? "", freebetStart: bk.freebetStart ?? "" });
-  };
-  const saveBk = () => {
-    const entry = { start: Number(bkForm.start), end: Number(bkForm.end), unitValue: Number(bkForm.unitValue), fees: Number(bkForm.fees), freebetStart: Number(bkForm.freebetStart) };
-    const isEmpty = [bkForm.start, bkForm.end, bkForm.unitValue, bkForm.fees, bkForm.freebetStart].every(v => v === "" || v === "0" || Number(v) === 0);
-    if (isEmpty) {
-      const next = { ...bankroll };
-      delete next[bkEdit];
-      updateBankroll(next);
-    } else {
-      updateBankroll({ ...bankroll, [bkEdit]: entry });
-    }
-    setBkEdit(null);
+  // ── NEW BANKROLL MODEL ────────────────────────────────────────────────────────
+  // bankroll is now a single object:
+  //   bankroll.global = { initialBalance: number, initialDate: string, unitValue: number }
+  //   bankroll.movements = [ { id, date, type: "deposit"|"withdrawal", amount, note } ]
+  // Monthly views are derived from bets + movements, no per-month start needed.
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const [showBkSetup, setShowBkSetup] = useState(false);
+  const [bkSetupForm, setBkSetupForm] = useState({ initialBalance: "", initialDate: "", unitValue: "" });
+  const [showMovModal, setShowMovModal] = useState(false);
+  const [movForm, setMovForm] = useState({ type: "deposit", amount: "", date: today(), note: "" });
+
+  const globalBk = bankroll.global ?? {};
+  const movements = bankroll.movements ?? [];
+
+  const openBkSetup = () => {
+    setBkSetupForm({ initialBalance: globalBk.initialBalance ?? "", initialDate: globalBk.initialDate ?? "", unitValue: globalBk.unitValue ?? "" });
+    setShowBkSetup(true);
   };
 
-  // Running balance per month = start BK + profit from bets
-  const runningBalance = (mk) => {
-    const bk = bankroll[mk] ?? {};
-    if (!bk.start) return null;
-    const profit = bets.filter((b) => monthKey(b.date) === mk).reduce((acc, b) => acc + calcProfit(b, "E"), 0);
-    const fees = Number(bk.fees ?? 0);
-    return bk.start + profit - fees;
+  const saveBkSetup = () => {
+    const next = { ...bankroll, global: { initialBalance: Number(bkSetupForm.initialBalance), initialDate: bkSetupForm.initialDate, unitValue: Number(bkSetupForm.unitValue) } };
+    updateBankroll(next);
+    setShowBkSetup(false);
   };
+
+  const addMovement = () => {
+    if (!movForm.amount) return;
+    const next = { ...bankroll, movements: [...movements, { ...movForm, id: Date.now(), amount: Number(movForm.amount) }] };
+    updateBankroll(next);
+    setMovForm({ type: "deposit", amount: "", date: today(), note: "" });
+    setShowMovModal(false);
+  };
+
+  const deleteMovement = (id) => {
+    const next = { ...bankroll, movements: movements.filter(m => m.id !== id) };
+    updateBankroll(next);
+  };
+
+  // Cumulative balance up to (and including) a given date
+  const balanceAtDate = (upToDate) => {
+    const initial = globalBk.initialBalance ?? 0;
+    const initialDate = globalBk.initialDate ?? "1970-01-01";
+    const profitUpTo = bets
+      .filter(b => b.date >= initialDate && b.date <= upToDate)
+      .reduce((a, b) => a + calcProfit(b, "E"), 0);
+    const movsUpTo = movements
+      .filter(m => m.date >= initialDate && m.date <= upToDate)
+      .reduce((a, m) => a + (m.type === "deposit" ? Number(m.amount) : -Number(m.amount)), 0);
+    return initial + profitUpTo + movsUpTo;
+  };
+
+  // Balance at end of month
+  const balanceEndOfMonth = (mk) => {
+    if (!globalBk.initialBalance) return null;
+    const [y, mo] = mk.split("-").map(Number);
+    const lastDay = new Date(y, mo, 0).getDate();
+    const endDate = `${mk}-${String(lastDay).padStart(2, "0")}`;
+    return balanceAtDate(endDate);
+  };
+
+  // Current running balance
+  const currentBalance = globalBk.initialBalance ? balanceAtDate(today()) : null;
+
+  // Profit for a given month (settled bets only)
+  const monthProfit = (mk) => bets
+    .filter(b => monthKey(b.date) === mk)
+    .reduce((a, b) => a + calcProfit(b, "E"), 0);
+
+  // Net movements for a given month
+  const monthMovements = (mk) => movements
+    .filter(m => monthKey(m.date) === mk)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // Running balance (legacy compat shim — not used in new model but kept for chart)
+  const runningBalance = (mk) => balanceEndOfMonth(mk);
 
   const renderGroup = (map, maxAbs) => Object.entries(map).map(([name, s]) => {
     const settled = s.bets.filter((b) => b.result !== "Void" && b.result !== "Pending").length;
@@ -1750,7 +1801,7 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
             {total.profitE >= 0 ? "+" : ""}{total.profitE.toFixed(2)}€
           </div>
           <div style={{ fontSize: 15, fontWeight: 700, color: total.profitU >= 0 ? T.win + "bb" : T.lose + "bb" }}>
-            {total.profitU >= 0 ? "+" : ""}{total.profitU.toFixed(2)}u
+            {total.profitU >= 0 ? "+" : ""}{total.profitU.toFixed(3)}u
           </div>
         </div>
         <div style={{ display: "flex", gap: 14, marginTop: 8, flexWrap: "wrap" }}>
@@ -1830,23 +1881,6 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
 
       {statsTab === "bk" && (
         <>
-          {/* CHART — only on All Time view */}
-          {filterMonth === "all" && <div style={{ background: T.card, borderRadius: 12, padding: 14, border: `1px solid ${T.border}` }}>
-            <div style={{ fontSize: 12, color: T.text2, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Bankroll Evolution</div>
-            <Sparkline data={bkChartData} />
-            {bkChartData.length > 0 && (
-              <div style={{ display: "flex", gap: 8, overflowX: "auto", marginTop: 10 }}>
-                {bkChartData.map((d) => (
-                  <div key={d.mk} style={{ textAlign: "center", flexShrink: 0, minWidth: 52 }}>
-                    <div style={{ fontSize: 10, color: T.text2 }}>{d.label}</div>
-                    <div style={{ fontSize: 12, fontWeight: 700 }}>{d.bk.toLocaleString()}€</div>
-                    <div style={{ fontSize: 10, color: d.profit >= 0 ? "#22c55e" : "#ef4444" }}>{fmt(d.profit)}€</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>}
-
           {/* DAILY PROFIT CHART */}
           <div style={{ background: T.card, borderRadius: 12, padding: 14, border: `1px solid ${T.border}` }}>
             <div style={{ fontSize: 12, color: T.text2, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>
@@ -1862,68 +1896,166 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
             )}
           </div>
 
-          {/* ADD MONTH BK BUTTON */}
-          <button onClick={() => {
-            const mk = monthKey(today());
-            openBkEdit(mk);
-          }} style={{ background: T.card2, border: "1px dashed #334155", borderRadius: 12, padding: "12px", color: T.accent, fontSize: 14, cursor: "pointer", fontWeight: 600 }}>
-            + Setup current month bankroll
-          </button>
+          {/* GLOBAL BANKROLL SETUP */}
+          <div style={{ background: T.card, borderRadius: 12, padding: "14px", border: `1px solid ${T.border}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: T.text2, textTransform: "uppercase", letterSpacing: 1 }}>Bankroll</div>
+              <button onClick={openBkSetup} style={{ background: T.card2, border: "none", borderRadius: 8, padding: "4px 12px", color: T.accent, fontSize: 12, cursor: "pointer" }}>
+                {globalBk.initialBalance ? "Edit" : "Setup"}
+              </button>
+            </div>
 
-          {/* MONTHLY BK */}
+            {globalBk.initialBalance ? (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
+                  <div style={{ background: T.card2, borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
+                    <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Initial</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{globalBk.initialBalance.toLocaleString()}€</div>
+                    <div style={{ fontSize: 9, color: T.text3, marginTop: 2 }}>{globalBk.initialDate ?? "–"}</div>
+                  </div>
+                  <div style={{ background: T.card2, borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
+                    <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>1u =</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: T.accent }}>{globalBk.unitValue ?? "–"}€</div>
+                  </div>
+                  <div style={{ background: T.card2, borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
+                    <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Balance</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: currentBalance >= globalBk.initialBalance ? T.win : T.lose }}>
+                      {currentBalance !== null ? currentBalance.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "€" : "–"}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Movements */}
+                {movements.length > 0 && (
+                  <div style={{ marginBottom: 10 }}>
+                    {movements.sort((a, b) => a.date.localeCompare(b.date)).map(m => (
+                      <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", fontSize: 12, borderBottom: `1px solid ${T.border}` }}>
+                        <div style={{ color: T.text3 }}>
+                          <span style={{ marginRight: 6 }}>{m.type === "deposit" ? "↗" : "↘"}</span>
+                          {m.date}{m.note ? ` · ${m.note}` : ""}
+                        </div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <span style={{ fontWeight: 700, color: m.type === "deposit" ? T.win : T.lose }}>
+                            {m.type === "deposit" ? "+" : "-"}{Number(m.amount).toFixed(2)}€
+                          </span>
+                          <button onClick={() => deleteMovement(m.id)} style={{ background: "none", border: "none", color: T.lose + "66", cursor: "pointer", fontSize: 14 }}>×</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button onClick={() => setShowMovModal(true)} style={{ width: "100%", background: "transparent", border: `1px dashed ${T.border2}`, borderRadius: 8, padding: "8px", color: T.text3, fontSize: 12, cursor: "pointer" }}>
+                  + Dépôt / Retrait
+                </button>
+              </>
+            ) : (
+              <div style={{ color: T.text3, textAlign: "center", padding: "20px 0", fontSize: 13 }}>
+                Configure ta bankroll initiale pour voir l'évolution du capital
+              </div>
+            )}
+          </div>
+
+          {/* MONTHLY BREAKDOWN */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {allMonths.filter(mk => filterMonth === "all" || mk === filterMonth).map((mk) => {
-              const bk = bankroll[mk] ?? {};
-              const running = runningBalance(mk);
+              const profit = monthProfit(mk);
+              const endBal = balanceEndOfMonth(mk);
+              const movs = monthMovements(mk);
+              const netMov = movs.reduce((a, m) => a + (m.type === "deposit" ? Number(m.amount) : -Number(m.amount)), 0);
+              const monthBets = bets.filter(b => monthKey(b.date) === mk);
+              const settled = monthBets.filter(b => b.result !== "Pending" && b.result !== "Void");
+              const wins = settled.filter(b => b.result === "Win").length;
+              const invested = settled.reduce((a, b) => a + Number(b.stakeE ?? b.stakee ?? 0), 0);
+              const roi = invested ? (profit / invested) * 100 : 0;
+              const pendingCount = monthBets.filter(b => b.result === "Pending").length;
+
               return (
                 <div key={mk} style={{ background: T.card, borderRadius: 12, padding: "12px 14px", border: `1px solid ${T.border}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <div style={{ fontWeight: 700 }}>{monthLabel(mk)}</div>
-                    <button onClick={() => openBkEdit(mk)} style={{ background: T.card2, border: "none", borderRadius: 8, padding: "4px 12px", color: T.accent, fontSize: 12, cursor: "pointer" }}>Edit</button>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{monthLabel(mk)}</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: profit >= 0 ? T.win : T.lose }}>
+                      {profit >= 0 ? "+" : ""}{profit.toFixed(2)}€
+                    </div>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontSize: 12 }}>
-                    <div style={{ color: T.text2 }}>Start: <b style={{ color: T.text }}>{bk.start ? bk.start.toLocaleString() + "€" : "–"}</b></div>
-                    <div style={{ color: T.text2 }}>End: <b style={{ color: T.text }}>{bk.end ? bk.end.toLocaleString() + "€" : "–"}</b></div>
-                    <div style={{ color: T.text2 }}>1u = <b style={{ color: T.accent }}>{bk.unitValue ? bk.unitValue + "€" : "–"}</b></div>
-                    <div style={{ color: T.text2 }}>Delta: <b style={{ color: T.lose }}>{bk.fees ? "-" + bk.fees + "€" : "–"}</b></div>
-                    {bk.freebetStart > 0 && (
-                      <div style={{ color: T.text2, gridColumn: "1 / -1", marginTop: 4, paddingTop: 4, borderTop: `1px solid ${T.border}` }}>
-                        🎁 Freebets <b style={{ color: "#7c3aed" }}>{(bk.freebetStart - bets.filter(b => (b.isFreebet || b.is_freebet) && monthKey(b.date) === mk).reduce((a, b) => a + Number(b.stakeE ?? b.stakee ?? 0), 0)).toFixed(2)}€</b>
-                        <span style={{ color: T.text3, fontSize: 10 }}> / {bk.freebetStart}€ initial</span>
-                      </div>
-                    )}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, fontSize: 11, marginBottom: 6 }}>
+                    <div style={{ color: T.text3 }}>Bets<br /><b style={{ color: T.text }}>{monthBets.length}</b></div>
+                    <div style={{ color: T.text3 }}>W/L<br /><b style={{ color: T.text }}>{wins}/{settled.length - wins}</b></div>
+                    <div style={{ color: T.text3 }}>ROI<br /><b style={{ color: roi >= 0 ? T.win : T.lose }}>{roi >= 0 ? "+" : ""}{roi.toFixed(1)}%</b></div>
+                    <div style={{ color: T.text3 }}>Pending<br /><b style={{ color: pendingCount > 0 ? T.pending : T.text3 }}>{pendingCount}</b></div>
                   </div>
-                  {running !== null && (
-                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div style={{ fontSize: 12, color: T.text2 }}>Running Balance</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: bk.end ? (running >= bk.end ? "#22c55e" : "#f59e0b") : "#e2e8f0" }}>
-                        {running.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                  {netMov !== 0 && (
+                    <div style={{ fontSize: 11, color: T.text3, borderTop: `1px solid ${T.border}`, paddingTop: 6, marginTop: 4 }}>
+                      {movs.map(m => (
+                        <span key={m.id} style={{ marginRight: 10 }}>
+                          {m.type === "deposit" ? "↗" : "↘"} <b style={{ color: m.type === "deposit" ? T.win : T.lose }}>{m.type === "deposit" ? "+" : "-"}{Number(m.amount).toFixed(0)}€</b>{m.note ? ` ${m.note}` : ""}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {endBal !== null && (
+                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ fontSize: 11, color: T.text3 }}>Balance fin de mois</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>
+                        {endBal.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
                       </div>
                     </div>
                   )}
                 </div>
               );
             })}
-            {/* Show months with BK config but no bets — only if they have actual data */}
-            {Object.keys(bankroll).filter(mk => !allMonths.includes(mk) && (bankroll[mk]?.start || bankroll[mk]?.unitValue) && (filterMonth === "all" || mk === filterMonth)).map(mk => {
-              const bk = bankroll[mk] ?? {};
-              return (
-                <div key={mk} style={{ background: T.card, borderRadius: 12, padding: "12px 14px", border: `1px solid ${T.border}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <div style={{ fontWeight: 700 }}>{monthLabel(mk)}</div>
-                    <button onClick={() => openBkEdit(mk)} style={{ background: T.card2, border: "none", borderRadius: 8, padding: "4px 12px", color: T.accent, fontSize: 12, cursor: "pointer" }}>Edit</button>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontSize: 12 }}>
-                    <div style={{ color: T.text2 }}>Start: <b style={{ color: T.text }}>{bk.start ? bk.start.toLocaleString() + "€" : "–"}</b></div>
-                    <div style={{ color: T.text2 }}>1u = <b style={{ color: T.accent }}>{bk.unitValue ? bk.unitValue + "€" : "–"}</b></div>
-                  </div>
-                </div>
-              );
-            })}
-            {allMonths.length === 0 && Object.keys(bankroll).length === 0 && (
-              <div style={{ color: T.text3, textAlign: "center", padding: 20 }}>No months yet — click "Setup current month" above</div>
+            {allMonths.length === 0 && (
+              <div style={{ color: T.text3, textAlign: "center", padding: 20 }}>Aucun pari saisi pour l'instant</div>
             )}
           </div>
+
+          {/* SETUP MODAL */}
+          {showBkSetup && (
+            <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}>
+              <div style={{ background: T.card2, borderRadius: 16, padding: 24, width: "100%", maxWidth: 340, border: `1px solid ${T.border2}` }}>
+                <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Bankroll Setup</div>
+                {[["initialBalance", "Solde initial (€)"], ["initialDate", "Date de départ"], ["unitValue", "1 unité = (€)"]].map(([k, lbl]) => (
+                  <div key={k} style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 5, fontWeight: 600 }}>{lbl}</div>
+                    <input type={k === "initialDate" ? "date" : "number"} value={bkSetupForm[k]} onChange={e => setBkSetupForm(f => ({ ...f, [k]: e.target.value }))}
+                      style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", color: T.text, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                  </div>
+                ))}
+                <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                  <Btn onClick={() => setShowBkSetup(false)} flex={1}>Annuler</Btn>
+                  <Btn onClick={saveBkSetup} bg={T.accent} color={T.bg} flex={2}>Sauvegarder</Btn>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MOVEMENT MODAL */}
+          {showMovModal && (
+            <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}>
+              <div style={{ background: T.card2, borderRadius: 16, padding: 24, width: "100%", maxWidth: 340, border: `1px solid ${T.border2}` }}>
+                <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Dépôt / Retrait</div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                  {["deposit", "withdrawal"].map(t => (
+                    <button key={t} onClick={() => setMovForm(f => ({ ...f, type: t }))}
+                      style={{ flex: 1, background: movForm.type === t ? (t === "deposit" ? T.win + "22" : T.lose + "22") : T.card, border: `1px solid ${movForm.type === t ? (t === "deposit" ? T.win : T.lose) : T.border}`, borderRadius: 8, padding: "8px", color: movForm.type === t ? (t === "deposit" ? T.win : T.lose) : T.text2, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                      {t === "deposit" ? "↗ Dépôt" : "↘ Retrait"}
+                    </button>
+                  ))}
+                </div>
+                {[["amount", "number", "Montant (€)"], ["date", "date", "Date"], ["note", "text", "Note (optionnel)"]].map(([k, type, lbl]) => (
+                  <div key={k} style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 5, fontWeight: 600 }}>{lbl}</div>
+                    <input type={type} value={movForm[k]} onChange={e => setMovForm(f => ({ ...f, [k]: e.target.value }))}
+                      style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", color: T.text, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                  </div>
+                ))}
+                <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                  <Btn onClick={() => setShowMovModal(false)} flex={1}>Annuler</Btn>
+                  <Btn onClick={addMovement} bg={T.accent} color={T.bg} flex={2}>Ajouter</Btn>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -1987,29 +2119,6 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
         </div>
       )}
 
-      {/* BK EDIT MODAL */}
-      {bkEdit && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-          <div style={{ background: T.card2, borderRadius: 16, padding: 24, margin: 20, border: `1px solid ${T.border2}`, maxWidth: 340, width: "100%" }}>
-            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Bankroll — {monthLabel(bkEdit)}</div>
-            {[["start", "Starting bankroll (€)"], ["end", "End bankroll (€)"], ["unitValue", "1 unit = (€)"], ["fees", "Delta (€)"], ["freebetStart", "🎁 Freebets initial (€)"]].map(([k, lbl]) => (
-              <div key={k} style={{ marginBottom: 12 }}>
-                <Input label={lbl} type="number" value={bkForm[k]} onChange={(e) => setBkForm((f) => ({ ...f, [k]: e.target.value }))} />
-              </div>
-            ))}
-            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-              <Btn onClick={() => {
-                const next = { ...bankroll };
-                delete next[bkEdit];
-                updateBankroll(next);
-                setBkEdit(null);
-              }} bg="#ef444422" color="#ef4444" flex={1}>Delete</Btn>
-              <Btn onClick={() => setBkEdit(null)} flex={1}>Cancel</Btn>
-              <Btn onClick={saveBk} bg="#38bdf8" color="#0a0f1e" flex={1}>Save</Btn>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
