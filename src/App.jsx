@@ -129,10 +129,12 @@ const calcProfit = (bet, field = "E") => {
     ? Number(bet.stakeE ?? bet.stakee ?? 0)
     : Number(bet.stakeU ?? bet.stakeu ?? 0);
   const isFB = bet.isFreebet ?? bet.is_freebet ?? false;
+  const isAccounted = bet.alreadyAccounted ?? bet.already_accounted ?? false;
   const booster = Number(bet.comboBooster ?? bet.combo_booster ?? 0);
   const boostMult = 1 + booster / 100;
   if (bet.result === "Win") return (Number(bet.odd) - 1) * stake * boostMult;
-  if (bet.result === "Lose") return isFB ? 0 : -stake;
+  // Lose: accounted bets → 0 (mise déjà dans solde départ), FB → 0, normal → -stake
+  if (bet.result === "Lose") return (isAccounted || isFB) ? 0 : -stake;
   return 0;
 };
 
@@ -507,6 +509,7 @@ export default function App() {
         stakeE: Number(b.stakee ?? 0),
         stakeU: Number(b.stakeu ?? 0),
         isFreebet: b.is_freebet ?? false,
+        alreadyAccounted: b.already_accounted ?? false,
         comboBooster: Number(b.combo_booster ?? 0),
         book: b.book ?? "",
       })));
@@ -540,7 +543,7 @@ export default function App() {
     if (editId !== null) {
       const f = valid[0];
       const stakeU = unitValue ? (Number(f.stakeE) / unitValue).toFixed(3) : f.stakeU;
-      const entry = { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), book: f.book ?? "" };
+      const entry = { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), book: f.book ?? "", already_accounted: f.alreadyAccounted ?? false };
       const { error } = await supabase.from("bets").update(entry).eq("id", editId);
       if (!error) setBets(bets.map((b) => (b.id === editId ? { ...entry, id: editId } : b)));
       else alert("Error saving: " + error.message);
@@ -548,10 +551,10 @@ export default function App() {
     } else {
       const newEntries = valid.map((f, i) => {
         const stakeU = unitValue ? (Number(f.stakeE ?? f.stakee) / unitValue).toFixed(3) : (f.stakeU ?? f.stakeu ?? 1);
-        return { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0) };
+        return { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), already_accounted: f.alreadyAccounted ?? false };
       });
       const { data, error } = await supabase.from("bets").insert(newEntries).select();
-      if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0), isFreebet: b.is_freebet ?? false })), ...bets]);
+      if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0), isFreebet: b.is_freebet ?? false, alreadyAccounted: b.already_accounted ?? false })), ...bets]);
       else alert("Error saving: " + error.message);
     }
     setBatchForms([emptyBetForm()]);
@@ -580,6 +583,7 @@ export default function App() {
       stakeU: Number(bet.stakeU ?? bet.stakeu ?? 0),
       odd: Number(bet.odd ?? 0),
       isFreebet: bet.isFreebet ?? bet.is_freebet ?? false,
+      alreadyAccounted: bet.alreadyAccounted ?? bet.already_accounted ?? false,
       comboBooster: Number(bet.comboBooster ?? bet.combo_booster ?? 0) || "",
       book: bet.book ?? "",
     }]);
@@ -924,6 +928,7 @@ const emptyBetForm = (base = {}) => ({
   result: "Pending",
   note: "",
   isFreebet: false,
+  alreadyAccounted: false,
   comboBooster: "",
   book: base.book ?? "PS3838",
 });
@@ -1066,6 +1071,43 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
         </div>
         <div style={{ marginLeft: "auto", fontSize: 11, color: form.isFreebet ? "#7c3aed" : T.text3, fontWeight: 600 }}>
           {form.isFreebet ? "FB" : "CASH"}
+        </div>
+      </button>
+
+      {/* Already Accounted toggle */}
+      <button
+        onClick={() => set("alreadyAccounted", !form.alreadyAccounted)}
+        style={{
+          display: "flex", alignItems: "center", gap: 10,
+          background: form.alreadyAccounted ? "#f0a50012" : T.card2,
+          border: `1px solid ${form.alreadyAccounted ? "#f0a50060" : T.border}`,
+          borderRadius: 8, padding: "8px 12px", cursor: "pointer", width: "100%",
+          transition: "all .2s",
+        }}
+      >
+        {/* Diamond checkbox */}
+        <div style={{
+          width: 18, height: 18, borderRadius: 4,
+          border: `2px solid ${form.alreadyAccounted ? "#f0a500" : T.border2}`,
+          background: form.alreadyAccounted ? "#f0a500" : "transparent",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          flexShrink: 0, transition: "all .2s",
+          transform: "rotate(45deg)",
+        }}>
+          {form.alreadyAccounted && (
+            <div style={{ width: 6, height: 6, background: T.bg, borderRadius: 1 }} />
+          )}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: form.alreadyAccounted ? "#f0a500" : T.text2, letterSpacing: 0.3 }}>
+            Already accounted
+          </span>
+          {form.alreadyAccounted && (
+            <span style={{ fontSize: 9, color: "#f0a50088", letterSpacing: 0.2 }}>Lose = 0 impact · Win = gain normal</span>
+          )}
+        </div>
+        <div style={{ marginLeft: "auto", fontSize: 10, color: form.alreadyAccounted ? "#f0a500" : T.text3, fontWeight: 700, letterSpacing: 0.5 }}>
+          {form.alreadyAccounted ? "ON" : "OFF"}
         </div>
       </button>
 
@@ -1445,6 +1487,7 @@ function BetCard({ bet, onEdit, onDelete, onUpdateResult }) {
             <Tag color={RESULT_COLORS[bet.result]}>{bet.result}</Tag>
             {bet.book && <Tag color={T.text3}>{bet.book}</Tag>}
             {(bet.isFreebet || bet.is_freebet) && <Tag color="#7c3aed">FB</Tag>}
+            {(bet.alreadyAccounted || bet.already_accounted) && <Tag color="#f0a500">◈ Accounted</Tag>}
           </div>
           <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, marginBottom: 4, color: T.text, overflow: "hidden", textOverflow: "ellipsis" }}>{bet.bet}</div>
           <div style={{ display: "flex", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
@@ -1679,6 +1722,86 @@ function BookTab({ byBook, bets, bookConfig, updateBookConfig }) {
   );
 }
 
+// ── FREEBET WALLET CARD ───────────────────────────────────────────────────────
+function FBWalletCard({ currentFBWallet, globalBk, bets, fbAdditions, addFBMovement, deleteFBMovement }) {
+  const [showFBMov, setShowFBMov] = useState(false);
+  const [fbMovForm, setFBMovForm] = useState({ amount: "", date: today(), note: "" });
+
+  const hasFB = (globalBk.initialFB ?? 0) > 0 || fbAdditions.length > 0;
+  if (!hasFB) return null;
+
+  const fbUsed = bets
+    .filter(b => (b.isFreebet || b.is_freebet) && b.date >= (globalBk.initialDate ?? "1970-01-01"))
+    .reduce((a, b) => a + Number(b.stakeE ?? b.stakee ?? 0), 0);
+
+  return (
+    <div style={{ background: T.card, borderRadius: 12, padding: "14px", border: "1px solid #7c3aed44" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ fontSize: 12, color: "#7c3aed", textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>Freebets</div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: (currentFBWallet ?? 0) >= 0 ? "#7c3aed" : T.lose }}>
+          {(currentFBWallet ?? 0).toFixed(2)}EUR
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12, fontSize: 11 }}>
+        <div style={{ background: T.card2, borderRadius: 8, padding: "8px 10px" }}>
+          <div style={{ color: T.text3, marginBottom: 2 }}>Initial</div>
+          <div style={{ color: "#7c3aed", fontWeight: 700 }}>{(globalBk.initialFB ?? 0).toFixed(2)}EUR</div>
+        </div>
+        <div style={{ background: T.card2, borderRadius: 8, padding: "8px 10px" }}>
+          <div style={{ color: T.text3, marginBottom: 2 }}>Utilises</div>
+          <div style={{ color: T.text2, fontWeight: 700 }}>-{fbUsed.toFixed(2)}EUR</div>
+        </div>
+      </div>
+      {fbAdditions.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          {[...fbAdditions].sort((a, b) => a.date.localeCompare(b.date)).map(m => (
+            <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", fontSize: 11, borderBottom: "1px solid " + T.border }}>
+              <div style={{ color: T.text3 }}>{m.date}{m.note ? " - " + m.note : ""}</div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span style={{ color: "#7c3aed", fontWeight: 700 }}>+{Number(m.amount).toFixed(2)}EUR</span>
+                <button onClick={() => deleteFBMovement(m.id)} style={{ background: "none", border: "none", color: T.lose + "66", cursor: "pointer", fontSize: 14 }}>x</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {showFBMov ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            <div>
+              <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4, fontWeight: 600 }}>Montant (EUR)</div>
+              <input type="number" placeholder="50" value={fbMovForm.amount} onChange={e => setFBMovForm(f => ({ ...f, amount: e.target.value }))}
+                style={{ width: "100%", background: T.card2, border: "1px solid " + T.border, borderRadius: 6, padding: "8px 10px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4, fontWeight: 600 }}>Date</div>
+              <input type="date" value={fbMovForm.date} onChange={e => setFBMovForm(f => ({ ...f, date: e.target.value }))}
+                style={{ width: "100%", background: T.card2, border: "1px solid " + T.border, borderRadius: 6, padding: "8px 10px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+            </div>
+          </div>
+          <input placeholder="Note (optionnel)" value={fbMovForm.note} onChange={e => setFBMovForm(f => ({ ...f, note: e.target.value }))}
+            style={{ background: T.card2, border: "1px solid " + T.border, borderRadius: 6, padding: "8px 10px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box", width: "100%" }} />
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => setShowFBMov(false)}
+              style={{ flex: 1, background: T.card2, border: "1px solid " + T.border, borderRadius: 6, padding: "8px", color: T.text2, fontSize: 12, cursor: "pointer" }}>
+              Annuler
+            </button>
+            <button onClick={() => { addFBMovement(fbMovForm.amount, fbMovForm.date, fbMovForm.note); setShowFBMov(false); setFBMovForm({ amount: "", date: today(), note: "" }); }}
+              style={{ flex: 2, background: "#7c3aed", border: "none", borderRadius: 6, padding: "8px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+              Ajouter des FB
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setShowFBMov(true)}
+          style={{ width: "100%", background: "transparent", border: "1px dashed #7c3aed55", borderRadius: 8, padding: "8px", color: "#7c3aed88", fontSize: 12, cursor: "pointer" }}>
+          + Ajouter des freebets
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // STATS TAB
 // ════════════════════════════════════════════════════════════════════════════════
@@ -1693,7 +1816,7 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
   // ─────────────────────────────────────────────────────────────────────────────
 
   const [showBkSetup, setShowBkSetup] = useState(false);
-  const [bkSetupForm, setBkSetupForm] = useState({ initialBalance: "", initialDate: "", unitValue: "" });
+  const [bkSetupForm, setBkSetupForm] = useState({ initialBalance: "", initialDate: "", unitValue: "", initialFB: "" });
   const [showMovModal, setShowMovModal] = useState(false);
   const [movForm, setMovForm] = useState({ type: "deposit", amount: "", date: today(), note: "" });
 
@@ -1701,12 +1824,12 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
   const movements = bankroll.movements ?? [];
 
   const openBkSetup = () => {
-    setBkSetupForm({ initialBalance: globalBk.initialBalance ?? "", initialDate: globalBk.initialDate ?? "", unitValue: globalBk.unitValue ?? "" });
+    setBkSetupForm({ initialBalance: globalBk.initialBalance ?? "", initialDate: globalBk.initialDate ?? "", unitValue: globalBk.unitValue ?? "", initialFB: globalBk.initialFB ?? "" });
     setShowBkSetup(true);
   };
 
   const saveBkSetup = () => {
-    const next = { ...bankroll, global: { initialBalance: Number(bkSetupForm.initialBalance), initialDate: bkSetupForm.initialDate, unitValue: Number(bkSetupForm.unitValue) } };
+    const next = { ...bankroll, global: { initialBalance: Number(bkSetupForm.initialBalance), initialDate: bkSetupForm.initialDate, unitValue: Number(bkSetupForm.unitValue), initialFB: Number(bkSetupForm.initialFB) } };
     updateBankroll(next);
     setShowBkSetup(false);
   };
@@ -1748,6 +1871,37 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
 
   // Current running balance
   const currentBalance = globalBk.initialBalance ? balanceAtDate(today()) : null;
+
+  // ── FREEBET WALLET ─────────────────────────────────────────────────────────
+  // FB wallet: starts at initialFB, each FB bet placed reduces it, FB top-ups add to it
+  // FB wins go to main bankroll (calcProfit handles it), FB losses = 0 impact on bankroll
+  const fbAdditions = (bankroll.fbMovements ?? []);
+
+  const fbWalletAtDate = (upToDate) => {
+    const initial = globalBk.initialFB ?? 0;
+    const initialDate = globalBk.initialDate ?? "1970-01-01";
+    // FB stakes placed (debits wallet)
+    const fbUsed = bets
+      .filter(b => (b.isFreebet || b.is_freebet) && b.date >= initialDate && b.date <= upToDate)
+      .reduce((a, b) => a + Number(b.stakeE ?? b.stakee ?? 0), 0);
+    // Manual FB top-ups
+    const fbAdded = fbAdditions
+      .filter(m => m.date <= upToDate)
+      .reduce((a, m) => a + Number(m.amount), 0);
+    return initial - fbUsed + fbAdded;
+  };
+
+  const currentFBWallet = (globalBk.initialFB ?? 0) > 0 || fbAdditions.length > 0
+    ? fbWalletAtDate(today()) : null;
+
+  const addFBMovement = (amount, date, note) => {
+    const next = { ...bankroll, fbMovements: [...(bankroll.fbMovements ?? []), { id: Date.now(), amount: Number(amount), date, note }] };
+    updateBankroll(next);
+  };
+  const deleteFBMovement = (id) => {
+    const next = { ...bankroll, fbMovements: (bankroll.fbMovements ?? []).filter(m => m.id !== id) };
+    updateBankroll(next);
+  };
 
   // Profit for a given month (settled bets only)
   const monthProfit = (mk) => bets
@@ -1956,6 +2110,10 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
             )}
           </div>
 
+          {/* FREEBET WALLET CARD */}
+          <FBWalletCard currentFBWallet={currentFBWallet} globalBk={globalBk} bets={bets} fbAdditions={fbAdditions} addFBMovement={addFBMovement} deleteFBMovement={deleteFBMovement} />
+
+
           {/* MONTHLY BREAKDOWN */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {allMonths.filter(mk => filterMonth === "all" || mk === filterMonth).map((mk) => {
@@ -2014,7 +2172,7 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
             <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}>
               <div style={{ background: T.card2, borderRadius: 16, padding: 24, width: "100%", maxWidth: 340, border: `1px solid ${T.border2}` }}>
                 <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Bankroll Setup</div>
-                {[["initialBalance", "Solde initial (€)"], ["initialDate", "Date de départ"], ["unitValue", "1 unité = (€)"]].map(([k, lbl]) => (
+                {[["initialBalance", "Solde initial (€)"], ["initialDate", "Date de départ"], ["unitValue", "1 unité = (€)"], ["initialFB", "🎁 Freebets initiaux (€)"]].map(([k, lbl]) => (
                   <div key={k} style={{ marginBottom: 12 }}>
                     <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 5, fontWeight: 600 }}>{lbl}</div>
                     <input type={k === "initialDate" ? "date" : "number"} value={bkSetupForm[k]} onChange={e => setBkSetupForm(f => ({ ...f, [k]: e.target.value }))}
