@@ -2,8 +2,8 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
-  "https://kxcrcxlomvrpvxcnncph.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4Y3JjeGxvbXZycHZ4Y25uY3BoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MTYwMTgsImV4cCI6MjA5NDE5MjAxOH0.-vlciOBd-go4MBck7lX4DNp5-aS5v0J1QGu4H-end4g"
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
 
@@ -620,7 +620,10 @@ export default function App() {
       if (b.result === "Win") { s.wins++; s.profitE += calcProfit(b, "E"); s.profitU += calcProfit(b, "U"); }
       else if (b.result === "Lose") { s.profitE += calcProfit(b, "E"); s.profitU += calcProfit(b, "U"); }
       if (b.result !== "Void") {
-        s.totalInvE += Number(b.stakeE ?? b.stakee ?? 0);
+        const isFB = b.isFreebet ?? b.is_freebet ?? false;
+        const isAcc = b.alreadyAccounted ?? b.already_accounted ?? false;
+        // totalInvE = cash invested only (exclude FB and already-accounted)
+        if (!isFB && !isAcc) s.totalInvE += Number(b.stakeE ?? b.stakee ?? 0);
         s.totalInvU += Number(b.stakeU ?? b.stakeu ?? 0);
       }
       if (b.odd) { s.oddsSum += Number(b.odd); s.oddsCount++; }
@@ -649,7 +652,9 @@ export default function App() {
       if (b.result === "Win") { wins++; profitE += calcProfit(b, "E"); profitU += calcProfit(b, "U"); }
       else if (b.result === "Lose") { profitE += calcProfit(b, "E"); profitU += calcProfit(b, "U"); }
       if (b.result !== "Void") {
-        totalInvE += Number(b.stakeE ?? b.stakee ?? 0);
+        const isFBt = b.isFreebet ?? b.is_freebet ?? false;
+        const isAcct = b.alreadyAccounted ?? b.already_accounted ?? false;
+        if (!isFBt && !isAcct) totalInvE += Number(b.stakeE ?? b.stakee ?? 0);
         totalInvU += Number(b.stakeU ?? b.stakeu ?? 0);
       }
       if (b.odd) { oddsSum += Number(b.odd); oddsCount++; }
@@ -665,24 +670,31 @@ export default function App() {
   }, [filtered]);
 
   const bkChartData = useMemo(() => {
-    const months = [...new Set([...allMonths, ...Object.keys(bankroll)])].sort();
-    const points = [];
-    months.forEach((mk) => {
-      const bkEntry = bankroll[mk] ?? {};
-      const profit = bets.filter((b) => monthKey(b.date) === mk).reduce((acc, b) => acc + calcProfit(b, "E"), 0);
-      // Add start point if we have it and it's the first month or different from prev end
-      if (bkEntry.start && points.length === 0) {
-        points.push({ label: monthLabel(mk) + " (start)", bk: bkEntry.start, profit: 0, mk });
-      }
-      if (bkEntry.end) {
-        points.push({ label: monthLabel(mk), bk: bkEntry.end, profit, mk });
-      } else if (bkEntry.start) {
-        // Current month — use running balance
-        const running = bkEntry.start + profit - Number(bkEntry.fees ?? 0);
-        points.push({ label: monthLabel(mk) + " (now)", bk: running, profit, mk });
-      }
+    const globalBk = bankroll.global ?? {};
+    if (!globalBk.initialBalance || !globalBk.initialDate) return [];
+    const movements = bankroll.movements ?? [];
+    const initial = globalBk.initialBalance;
+    const initialDate = globalBk.initialDate;
+
+    // Build one point per month-end from initialDate onwards
+    const points = [{ label: monthLabel(monthKey(initialDate)) + " (start)", bk: initial, profit: 0, mk: monthKey(initialDate) }];
+
+    allMonths.filter(mk => mk >= monthKey(initialDate)).forEach(mk => {
+      const [y, mo] = mk.split("-").map(Number);
+      const lastDay = new Date(y, mo, 0).getDate();
+      const endDate = `${mk}-${String(lastDay).padStart(2, "0")}`;
+      const profitUpTo = bets
+        .filter(b => b.date >= initialDate && b.date <= endDate)
+        .reduce((a, b) => a + calcProfit(b, "E"), 0);
+      const movsUpTo = movements
+        .filter(m => m.date >= initialDate && m.date <= endDate)
+        .reduce((a, m) => a + (m.type === "deposit" ? Number(m.amount) : -Number(m.amount)), 0);
+      const bk = initial + profitUpTo + movsUpTo;
+      const monthProfit = bets.filter(b => monthKey(b.date) === mk).reduce((a, b) => a + calcProfit(b, "E"), 0);
+      points.push({ label: monthLabel(mk), bk, profit: monthProfit, mk });
     });
-    return points.filter(d => d.bk > 0);
+
+    return points;
   }, [allMonths, bets, bankroll]);
 
   const maxProfitAbs = Math.max(...Object.values(bySport).map((s) => Math.abs(s.profitE)), 1);
@@ -1262,6 +1274,7 @@ function WeekGroup({ weekLabel, days, bets, onEdit, onDelete, onUpdateResult, de
 function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, onDeleteAll, filterMonth, scrollToDate, onScrollDone }) {
   const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [sportFilter, setSportFilter] = useState("All");
+  const [bookFilter, setBookFilter] = useState("All");
   const [showFilters, setShowFilters] = useState(false);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("date");
@@ -1281,6 +1294,7 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
   const statuses = ["All", "Pending", "Win", "Lose", "Void"];
   const filtered = bets
     .filter(b => sportFilter === "All" || b.sport === sportFilter)
+    .filter(b => bookFilter === "All" || (b.book || "Unknown") === bookFilter)
     .filter(b => statusFilter === "All" || b.result === statusFilter)
     .filter(b => !search || b.bet?.toLowerCase().includes(search.toLowerCase()) || b.league?.toLowerCase().includes(search.toLowerCase()) || (b.subCat ?? b.subcat ?? '').toLowerCase().includes(search.toLowerCase()));
   
@@ -1344,8 +1358,11 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
         <button onClick={downloadTemplate} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px", color: T.accent, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
           📋 Template
         </button>
-        <button onClick={() => setShowFilters(f => !f)} style={{ background: showFilters ? T.accentDim : T.card, border: `1px solid ${showFilters ? T.accent : T.border}`, borderRadius: 8, padding: "9px 11px", color: showFilters ? T.accent : T.text2, fontSize: 13, cursor: "pointer" }}>
+        <button onClick={() => setShowFilters(f => !f)} style={{ background: showFilters ? T.accentDim : T.card, border: `1px solid ${showFilters ? T.accent : T.border}`, borderRadius: 8, padding: "9px 11px", color: showFilters ? T.accent : T.text2, fontSize: 13, cursor: "pointer", position: "relative" }}>
           ⚙︎
+          {(sportFilter !== "All" || statusFilter !== "All" || bookFilter !== "All") && (
+            <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: T.accent, display: "block" }} />
+          )}
         </button>
       </div>
 
@@ -1379,6 +1396,12 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
                   color={s !== "All" ? RESULT_COLORS[s] : undefined}
                   onClick={() => setStatusFilter(s)} />
               ))}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Filter by book</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {["All", ...BOOKS].map(b => <Chip key={b} label={b} active={bookFilter === b} onClick={() => setBookFilter(b)} />)}
             </div>
           </div>
           <div>
@@ -1470,6 +1493,7 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
 
 function BetCard({ bet, onEdit, onDelete, onUpdateResult }) {
   const profitE = calcProfit(bet, "E");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   return (
     <div style={{
       background: T.card, borderRadius: 10,
@@ -1524,7 +1548,15 @@ function BetCard({ bet, onEdit, onDelete, onUpdateResult }) {
           )}
           <div style={{ display: "flex", gap: 4 }}>
             <button onClick={() => onEdit(bet)} style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 6px", cursor: "pointer", color: T.text2, display: "flex" }}><Icons.Edit s={13} /></button>
-            <button onClick={() => onDelete(bet.id)} style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 6px", cursor: "pointer", color: T.lose + "88", display: "flex" }}><Icons.Trash s={13} /></button>
+            {confirmDelete ? (
+              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                <span style={{ fontSize: 10, color: T.lose, fontWeight: 700 }}>Sure?</span>
+                <button onClick={() => onDelete(bet.id)} style={{ background: T.lose + "22", border: `1px solid ${T.lose}55`, borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: T.lose, fontSize: 10, fontWeight: 700 }}>Yes</button>
+                <button onClick={() => setConfirmDelete(false)} style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: T.text2, fontSize: 10 }}>No</button>
+              </div>
+            ) : (
+              <button onClick={() => setConfirmDelete(true)} style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 6px", cursor: "pointer", color: T.lose + "88", display: "flex" }}><Icons.Trash s={13} /></button>
+            )}
           </div>
         </div>
       </div>
