@@ -1651,10 +1651,6 @@ function BookTab({ byBook, bets, bookConfig, updateBookConfig }) {
             </div>
             {/* Body */}
             <div style={{ padding: "12px 14px 12px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div></div>
-              </div>
-
               {/* Progress bar */}
               <div style={{ height: 4, background: T.card2, borderRadius: 3, marginBottom: 10, overflow: "hidden" }}>
                 <div style={{ width: `${Math.min(Math.abs(s.profitE) / maxAbs * 100, 100)}%`, height: "100%", background: s.profitE >= 0 ? T.win : T.lose, borderRadius: 3 }} />
@@ -1682,7 +1678,6 @@ function BookTab({ byBook, bets, bookConfig, updateBookConfig }) {
               )}
             </div>
 
-            </div>
             {/* Movements */}
             {hasStart && movements.length > 0 && (
               <div style={{ borderTop: `1px solid ${T.border}`, padding: "8px 14px" }}>
