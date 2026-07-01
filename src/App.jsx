@@ -73,6 +73,16 @@ const SPORTS_CONFIG = {
 
 const SPORTS = Object.keys(SPORTS_CONFIG);
 const BOOKS = ["PS3838", "Betclic", "Unibet", "Winamax", "Autre"];
+
+// Brand colors extracted from each bookmaker's logo/identity
+const BOOK_COLORS = {
+  PS3838:   { bg: "#1a6b3c", text: "#ffffff", accent: "#22c55e" }, // Pinnacle green
+  Betclic:  { bg: "#e8001c", text: "#ffffff", accent: "#ff4d63" }, // Betclic red
+  Unibet:   { bg: "#007832", text: "#ffffff", accent: "#00a846" }, // Unibet green
+  Winamax:  { bg: "#f4600c", text: "#ffffff", accent: "#ff8c42" }, // Winamax orange
+  Autre:    { bg: "#334155", text: "#e2e8f0", accent: "#94a3b8" }, // Neutral slate
+};
+const bookColor = (book) => BOOK_COLORS[book] ?? { bg: "#1e293b", text: "#e2e8f0", accent: "#38bdf8" };
 const RESULTS = ["Pending", "Win", "Lose", "Void"];
 
 const RESULT_COLORS = {
@@ -324,22 +334,22 @@ const downloadTemplate = () => {
       {
         Date: "2026-06-12", Sport: "Tennis", League: "ATP", "Sub-cat": "ML",
         Bet: "Djokovic vs Alcaraz ML", Odd: 2.10, "Stake (€)": 60, "Stake (u)": 1.00,
-        Result: "Win", Book: "PS3838", Freebet: "No", Note: ""
+        Result: "Win", Book: "PS3838", Freebet: "No", "Already Accounted": "No", Note: ""
       },
       {
         Date: "2026-06-12", Sport: "Baseball", League: "MLB", "Sub-cat": "Player Props",
         Bet: "Yankees vs Red Sox - Judge HR", Odd: 4.50, "Stake (€)": 15, "Stake (u)": 0.25,
-        Result: "Lose", Book: "Betclic", Freebet: "No", Note: "Example note"
+        Result: "Lose", Book: "Betclic", Freebet: "No", "Already Accounted": "No", Note: "Example note"
       },
       {
         Date: "2026-06-12", Sport: "Soccer", League: "BPL", "Sub-cat": "AH",
         Bet: "Arsenal vs Chelsea AH -0.5", Odd: 1.95, "Stake (€)": 60, "Stake (u)": 1.00,
-        Result: "Pending", Book: "Unibet", Freebet: "Yes", Note: "Freebet example"
+        Result: "Pending", Book: "Unibet", Freebet: "Yes", "Already Accounted": "Yes", Note: "Outright long terme"
       },
     ];
     const ws = XLSX.utils.json_to_sheet(rows);
     // Set column widths
-    ws["!cols"] = [10,12,15,14,40,8,12,12,10,10,10,20].map(w => ({ wch: w }));
+    ws["!cols"] = [10,12,15,14,40,8,12,12,10,10,10,18,10].map(w => ({ wch: w }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Bets Template");
     XLSX.writeFile(wb, "bet-tracker-template.xlsx");
@@ -429,6 +439,7 @@ const parseCSV = (text) => {
       result: result || "",
       note: g("note") || "",
       isFreebet: ["yes", "oui", "true", "1"].includes((g("freebet", "is_freebet", "freebets") || "").toLowerCase()),
+      alreadyAccounted: ["yes", "oui", "true", "1"].includes((g("already accounted", "already_accounted", "alreadyaccounted", "accounted") || "").toLowerCase()),
       book: g("book", "bookmaker", "Book", "Bookmaker") || "",
     };
   }).filter((b) => b && b.bet);
@@ -461,6 +472,7 @@ const exportXLSX = (bets) => {
         "Profit (u)": stakeU > 0 ? profitU : "",
         Book: b.book ?? "",
         Freebet: (b.isFreebet || b.is_freebet) ? "Yes" : "No",
+        "Already Accounted": (b.alreadyAccounted || b.already_accounted) ? "Yes" : "No",
         Note: b.note ?? "",
       };
     });
@@ -1625,18 +1637,22 @@ function BookTab({ byBook, bets, bookConfig, updateBookConfig }) {
         const movements = cfg.movements ?? [];
 
         return (
-          <div key={book} style={{ background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, overflow: "hidden" }}>
-            {/* Header */}
-            <div style={{ padding: "14px 14px 12px" }}>
+          <div key={book} style={{ background: T.card, borderRadius: 12, border: `1px solid ${bookColor(book).bg}44`, overflow: "hidden" }}>
+            {/* Colored header strip */}
+            <div style={{ background: `linear-gradient(135deg, ${bookColor(book).bg}, ${bookColor(book).bg}cc)`, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontWeight: 800, fontSize: 15, color: bookColor(book).text, letterSpacing: 0.3 }}>{book}</div>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <span style={{ fontSize: 15, fontWeight: 800, color: s.profitE >= 0 ? "#86efac" : "#fca5a5", fontVariantNumeric: "tabular-nums" }}>{fmt(s.profitE)}€</span>
+                <button onClick={() => { setEditBook(book); setEditForm({ start: cfg.start ?? "", date: cfg.date ?? today() }); }}
+                  style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 6, padding: "3px 10px", color: bookColor(book).text, fontSize: 11, cursor: "pointer" }}>
+                  Setup
+                </button>
+              </div>
+            </div>
+            {/* Body */}
+            <div style={{ padding: "12px 14px 12px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: T.text }}>{book}</div>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <span style={{ fontSize: 15, fontWeight: 800, color: s.profitE >= 0 ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>{fmt(s.profitE)}€</span>
-                  <button onClick={() => { setEditBook(book); setEditForm({ start: cfg.start ?? "", date: cfg.date ?? today() }); }}
-                    style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "3px 10px", color: T.accent, fontSize: 11, cursor: "pointer" }}>
-                    Setup
-                  </button>
-                </div>
+                <div></div>
               </div>
 
               {/* Progress bar */}
@@ -1666,6 +1682,7 @@ function BookTab({ byBook, bets, bookConfig, updateBookConfig }) {
               )}
             </div>
 
+            </div>
             {/* Movements */}
             {hasStart && movements.length > 0 && (
               <div style={{ borderTop: `1px solid ${T.border}`, padding: "8px 14px" }}>
