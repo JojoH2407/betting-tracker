@@ -1637,14 +1637,14 @@ function BookTab({ byBook, bets, bookConfig, updateBookConfig }) {
         const movements = cfg.movements ?? [];
 
         return (
-          <div key={book} style={{ background: T.card, borderRadius: 12, border: `1px solid ${bookColor(book).bg}44`, overflow: "hidden" }}>
-            {/* Colored header strip */}
-            <div style={{ background: `linear-gradient(135deg, ${bookColor(book).bg}, ${bookColor(book).bg}cc)`, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontWeight: 800, fontSize: 15, color: bookColor(book).text, letterSpacing: 0.3 }}>{book}</div>
+          <div key={book} style={{ background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, borderLeft: `3px solid ${bookColor(book).bg}`, overflow: "hidden" }}>
+            {/* Header */}
+            <div style={{ padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontWeight: 800, fontSize: 15, color: bookColor(book).accent, letterSpacing: 0.3 }}>{book}</div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <span style={{ fontSize: 15, fontWeight: 800, color: s.profitE >= 0 ? "#86efac" : "#fca5a5", fontVariantNumeric: "tabular-nums" }}>{fmt(s.profitE)}€</span>
+                <span style={{ fontSize: 15, fontWeight: 800, color: s.profitE >= 0 ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>{fmt(s.profitE)}€</span>
                 <button onClick={() => { setEditBook(book); setEditForm({ start: cfg.start ?? "", date: cfg.date ?? today() }); }}
-                  style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 6, padding: "3px 10px", color: bookColor(book).text, fontSize: 11, cursor: "pointer" }}>
+                  style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "3px 10px", color: T.accent, fontSize: 11, cursor: "pointer" }}>
                   Setup
                 </button>
               </div>
