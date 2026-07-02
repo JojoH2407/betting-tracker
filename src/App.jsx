@@ -76,7 +76,7 @@ const BOOKS = ["PS3838", "Betclic", "Unibet", "Winamax", "Autre"];
 
 // Brand colors extracted from each bookmaker's logo/identity
 const BOOK_COLORS = {
-  PS3838:   { bg: "#1a6b3c", text: "#ffffff", accent: "#22c55e" }, // Pinnacle green
+  PS3838:   { bg: "#1a3a6b", text: "#ffffff", accent: "#4d8ef0" }, // Pinnacle blue
   Betclic:  { bg: "#e8001c", text: "#ffffff", accent: "#ff4d63" }, // Betclic red
   Unibet:   { bg: "#007832", text: "#ffffff", accent: "#00a846" }, // Unibet green
   Winamax:  { bg: "#f4600c", text: "#ffffff", accent: "#ff8c42" }, // Winamax orange
