@@ -563,10 +563,10 @@ export default function App() {
     } else {
       const newEntries = valid.map((f, i) => {
         const stakeU = unitValue ? (Number(f.stakeE ?? f.stakee) / unitValue).toFixed(3) : (f.stakeU ?? f.stakeu ?? 1);
-        return { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), already_accounted: f.alreadyAccounted ?? false };
+        return { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), already_accounted: f.alreadyAccounted ?? false, book: f.book ?? "" };
       });
       const { data, error } = await supabase.from("bets").insert(newEntries).select();
-      if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0), isFreebet: b.is_freebet ?? false, alreadyAccounted: b.already_accounted ?? false })), ...bets]);
+      if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0), isFreebet: b.is_freebet ?? false, alreadyAccounted: b.already_accounted ?? false, book: b.book ?? "" })), ...bets]);
       else alert("Error saving: " + error.message);
     }
     setBatchForms([emptyBetForm()]);
@@ -766,10 +766,24 @@ export default function App() {
         stakee: Number(rest.stakeE ?? rest.stakee), stakeu: Number(rest.stakeU ?? rest.stakeu),
         result: rest.result || "", note: rest.note ?? "",
         is_freebet: rest.isFreebet ?? false,
+        already_accounted: rest.alreadyAccounted ?? false,
+        book: rest.book ?? "",
+        combo_booster: Number(rest.comboBooster ?? rest.combo_booster ?? 0),
       }));
       const { data, error } = await supabase.from("bets").insert(toInsert).select();
-      if (data) { setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0) })), ...bets]); alert(`✅ ${data.length} bets imported!`); }
-      else alert("Import error: " + error.message);
+      if (data) {
+        setBets([...data.map(b => ({
+          ...b,
+          subCat: b.subcat ?? "",
+          stakeE: Number(b.stakee ?? 0),
+          stakeU: Number(b.stakeu ?? 0),
+          isFreebet: b.is_freebet ?? false,
+          alreadyAccounted: b.already_accounted ?? false,
+          book: b.book ?? "",
+          comboBooster: Number(b.combo_booster ?? 0),
+        })), ...bets]);
+        alert(`✅ ${data.length} bets imported!`);
+      } else alert("Import error: " + error.message);
     };
 
     if (isXLSX) {
