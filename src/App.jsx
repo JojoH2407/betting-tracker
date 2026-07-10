@@ -1345,10 +1345,10 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
       if (sportCmp !== 0) return sportCmp;
     }
 
-    // 5. Within settled: order by created_at (insertion order)
+    // 5. Within settled: newest first
     const caA = a.created_at ?? "";
     const caB = b.created_at ?? "";
-    return caA.localeCompare(caB); // ascending = oldest first within the day
+    return caB.localeCompare(caA); // descending = newest first within the day
   });
 
   // Group by week then by day (default) OR by sport
@@ -1665,10 +1665,6 @@ function BookTab({ byBook, bets, bookConfig, updateBookConfig }) {
             </div>
             {/* Body */}
             <div style={{ padding: "12px 14px 12px" }}>
-              {/* Progress bar */}
-              <div style={{ height: 4, background: T.card2, borderRadius: 3, marginBottom: 10, overflow: "hidden" }}>
-                <div style={{ width: `${Math.min(Math.abs(s.profitE) / maxAbs * 100, 100)}%`, height: "100%", background: s.profitE >= 0 ? T.win : T.lose, borderRadius: 3 }} />
-              </div>
 
               {/* Stats grid */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, fontSize: 11, marginBottom: hasStart ? 10 : 0 }}>
