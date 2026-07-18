@@ -66,7 +66,7 @@ const SPORTS_CONFIG = {
     leagues: ["UFC"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright"],
   },
-  eSport: { leagues: ["CS2", "LoL", "Autre"], subCats: ["ML", "Boost", "Outright"] },
+  eSport: { leagues: ["CS2", "LoL", "Dota 2", "Mixed", "Autre"], subCats: ["ML", "Boost", "Outright", "Parlay"] },
   "F1": { leagues: ["F1"], subCats: ["Boost", "Outright"] },
   Cycling: { leagues: ["Tour de France", "Giro", "Vuelta", "Autre"], subCats: ["Boost", "Outright"] },
 };
