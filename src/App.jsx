@@ -47,7 +47,7 @@ const SPORTS_CONFIG = {
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright"],
   },
   Soccer: {
-    leagues: ["Ligue 1", "BPL", "Liga", "Serie A", "Bundesliga", "European Cup", "World Cup", "National Cup", "Exhibition", "Exotique"],
+    leagues: ["Ligue 1", "BPL", "Liga", "Serie A", "Bundesliga", "European Cup", "World Cup", "MLS", "National Cup", "Exhibition", "Exotique"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright"],
   },
   "US Football": {
@@ -400,7 +400,7 @@ const parseCSV = (text) => {
   const headers = parseCSVLine(lines[0], sep).map((h) => h.replace(/"/g, "").toLowerCase().trim());
 
   const resultMap = { win: "Win", lose: "Lose", void: "Void", "": "", pending: "Pending" };
-  const sportMap = { tennis: "Tennis", baseball: "Baseball", mlb: "Baseball", football: "Soccer", soccer: "Soccer", "us football": "US Football", nfl: "US Football", basketball: "Basketball", nba: "Basketball", wnba: "Basketball", esport: "eSport", "e-sport": "eSport", f1: "F1", cycling: "Cycling", hockey: "Hockey", nhl: "Hockey", mma: "MMA", ufc: "MMA" };
+  const sportMap = { tennis: "Tennis", baseball: "Baseball", mlb: "Baseball", football: "Soccer", soccer: "Soccer", mls: "Soccer", "us football": "US Football", nfl: "US Football", basketball: "Basketball", nba: "Basketball", wnba: "Basketball", esport: "eSport", "e-sport": "eSport", f1: "F1", cycling: "Cycling", hockey: "Hockey", nhl: "Hockey", mma: "MMA", ufc: "MMA" };
 
   return lines.slice(1).map((line) => {
     if (!line.trim()) return null;
