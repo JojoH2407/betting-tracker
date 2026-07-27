@@ -72,15 +72,19 @@ const SPORTS_CONFIG = {
 };
 
 const SPORTS = Object.keys(SPORTS_CONFIG);
-const BOOKS = ["PS3838", "Betclic", "Unibet", "Winamax", "Autre"];
+const BOOKS = ["PS3838", "Betclic", "Unibet", "Winamax", "PMU", "PokerStars", "Bet365", "Yonibet", "Autre"];
 
 // Brand colors extracted from each bookmaker's logo/identity
 const BOOK_COLORS = {
-  PS3838:   { bg: "#1a3a6b", text: "#ffffff", accent: "#4d8ef0" }, // Pinnacle blue
-  Betclic:  { bg: "#e8001c", text: "#ffffff", accent: "#ff4d63" }, // Betclic red
-  Unibet:   { bg: "#007832", text: "#ffffff", accent: "#00a846" }, // Unibet green
-  Winamax:  { bg: "#f4600c", text: "#ffffff", accent: "#ff8c42" }, // Winamax orange
-  Autre:    { bg: "#334155", text: "#e2e8f0", accent: "#94a3b8" }, // Neutral slate
+  PS3838:      { bg: "#1a3a6b", text: "#ffffff", accent: "#4d8ef0" }, // Pinnacle blue
+  Betclic:     { bg: "#e8001c", text: "#ffffff", accent: "#ff4d63" }, // Betclic red
+  Unibet:      { bg: "#007832", text: "#ffffff", accent: "#00a846" }, // Unibet green
+  Winamax:     { bg: "#f4600c", text: "#ffffff", accent: "#ff8c42" }, // Winamax orange
+  PMU:         { bg: "#006eb7", text: "#ffffff", accent: "#3da5e8" }, // PMU blue
+  PokerStars:  { bg: "#c00", text: "#ffffff", accent: "#ff4444" },    // PokerStars red
+  Bet365:      { bg: "#006400", text: "#ffffff", accent: "#00a000" }, // Bet365 green
+  Yonibet:     { bg: "#7b2fd4", text: "#ffffff", accent: "#a855f7" }, // Yonibet purple
+  Autre:       { bg: "#334155", text: "#e2e8f0", accent: "#94a3b8" }, // Neutral slate
 };
 const bookColor = (book) => BOOK_COLORS[book] ?? { bg: "#1e293b", text: "#e2e8f0", accent: "#38bdf8" };
 const RESULTS = ["Pending", "Win", "Lose", "Void"];
@@ -1653,10 +1657,10 @@ function BookTab({ byBook, bets, bookConfig, updateBookConfig }) {
         return (
           <div key={book} style={{ background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, borderLeft: `3px solid ${bookColor(book).bg}`, overflow: "hidden" }}>
             {/* Header */}
-            <div style={{ padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontWeight: 800, fontSize: 15, color: bookColor(book).accent, letterSpacing: 0.3 }}>{book}</div>
+            <div style={{ padding: "9px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontWeight: 800, fontSize: 13, color: bookColor(book).accent, letterSpacing: 0.3 }}>{book}</div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <span style={{ fontSize: 15, fontWeight: 800, color: s.profitE >= 0 ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>{fmt(s.profitE)}€</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: s.profitE >= 0 ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>{fmt(s.profitE)}€</span>
                 <button onClick={() => { setEditBook(book); setEditForm({ start: cfg.start ?? "", date: cfg.date ?? today() }); }}
                   style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "3px 10px", color: T.accent, fontSize: 11, cursor: "pointer" }}>
                   Setup
@@ -1664,7 +1668,7 @@ function BookTab({ byBook, bets, bookConfig, updateBookConfig }) {
               </div>
             </div>
             {/* Body */}
-            <div style={{ padding: "12px 14px 12px" }}>
+            <div style={{ padding: "8px 12px 10px" }}>
 
               {/* Stats grid */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, fontSize: 11, marginBottom: hasStart ? 10 : 0 }}>
