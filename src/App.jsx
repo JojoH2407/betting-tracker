@@ -1655,23 +1655,23 @@ function BookTab({ byBook, bets, bookConfig, updateBookConfig }) {
         const movements = cfg.movements ?? [];
 
         return (
-          <div key={book} style={{ background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, borderLeft: `3px solid ${bookColor(book).bg}`, overflow: "hidden" }}>
+          <div key={book} style={{ background: T.card, borderRadius: 10, border: `1px solid ${T.border}`, borderLeft: `3px solid ${bookColor(book).bg}`, overflow: "hidden" }}>
             {/* Header */}
-            <div style={{ padding: "9px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontWeight: 800, fontSize: 13, color: bookColor(book).accent, letterSpacing: 0.3 }}>{book}</div>
+            <div style={{ padding: "6px 10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontWeight: 800, fontSize: 12, color: bookColor(book).accent, letterSpacing: 0.3 }}>{book}</div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <span style={{ fontSize: 13, fontWeight: 800, color: s.profitE >= 0 ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>{fmt(s.profitE)}€</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: s.profitE >= 0 ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>{fmt(s.profitE)}€</span>
                 <button onClick={() => { setEditBook(book); setEditForm({ start: cfg.start ?? "", date: cfg.date ?? today() }); }}
-                  style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "3px 10px", color: T.accent, fontSize: 11, cursor: "pointer" }}>
+                  style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 8px", color: T.accent, fontSize: 10, cursor: "pointer" }}>
                   Setup
                 </button>
               </div>
             </div>
             {/* Body */}
-            <div style={{ padding: "8px 12px 10px" }}>
+            <div style={{ padding: "6px 10px 8px" }}>
 
               {/* Stats grid */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, fontSize: 11, marginBottom: hasStart ? 10 : 0 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, fontSize: 10, marginBottom: hasStart ? 6 : 0 }}>
                 <div><div style={{ color: T.text, fontWeight: 700 }}>{s.bets.length}</div><div style={{ color: T.text3 }}>Bets</div></div>
                 <div><div style={{ color: T.text, fontWeight: 700 }}>{fmtAbs(wr)}%</div><div style={{ color: T.text3 }}>Win %</div></div>
                 <div><div style={{ color: roi >= 0 ? T.win : T.lose, fontWeight: 700 }}>{fmt(roi)}%</div><div style={{ color: T.text3 }}>ROI</div></div>
@@ -1680,7 +1680,7 @@ function BookTab({ byBook, bets, bookConfig, updateBookConfig }) {
 
               {/* Running balance */}
               {hasStart && (
-                <div style={{ background: T.card2, borderRadius: 8, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ background: T.card2, borderRadius: 8, padding: "6px 10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ fontSize: 11, color: T.text3 }}>
                     Start: <b style={{ color: T.text }}>{cfg.start}€</b>
                     {movements.length > 0 && <span style={{ marginLeft: 8 }}>Mvts: <b style={{ color: T.text }}>{movements.reduce((a,m) => a + (m.type==="deposit"?1:-1)*Number(m.amount),0) >= 0 ? "+" : ""}{movements.reduce((a,m) => a + (m.type==="deposit"?1:-1)*Number(m.amount),0).toFixed(0)}€</b></span>}
