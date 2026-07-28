@@ -146,8 +146,10 @@ const calcProfit = (bet, field = "E") => {
   const isAccounted = bet.alreadyAccounted ?? bet.already_accounted ?? false;
   const booster = Number(bet.comboBooster ?? bet.combo_booster ?? 0);
   const boostMult = 1 + booster / 100;
-  if (bet.result === "Win") return (Number(bet.odd) - 1) * stake * boostMult;
-  // Lose: accounted bets → 0 (mise déjà dans solde départ), FB → 0, normal → -stake
+  if (bet.result === "Win") return isAccounted
+    ? Number(bet.odd) * stake * boostMult          // Already accounted: retour total (mise incluse)
+    : (Number(bet.odd) - 1) * stake * boostMult;  // Normal: gain net seulement
+  // Lose: accounted → 0 (mise déjà dans solde départ), FB → 0, normal → -stake
   if (bet.result === "Lose") return (isAccounted || isFB) ? 0 : -stake;
   return 0;
 };
