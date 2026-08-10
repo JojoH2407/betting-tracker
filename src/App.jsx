@@ -70,6 +70,7 @@ const SPORTS_CONFIG = {
   "Mixed Sports": { leagues: ["Mixed"], subCats: ["Boost", "Parlay"] },
   "F1": { leagues: ["F1"], subCats: ["Boost", "Outright"] },
   Cycling: { leagues: ["Tour de France", "Giro", "Vuelta", "Autre"], subCats: ["Boost", "Outright"] },
+  Athletism: { leagues: ["European Games", "World Games", "Olympic Games"], subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright"] },
 };
 
 const SPORTS = Object.keys(SPORTS_CONFIG);
