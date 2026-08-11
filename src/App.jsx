@@ -563,13 +563,28 @@ export default function App() {
 
   const handleSaveAll = async () => {
     if (saving) return;
-    const valid = batchForms.filter(f => f.bet && f.odd);
+    const valid = batchForms.filter(f => {
+      if ((f.subCat ?? f.subcat) === "System 2/3") {
+        const legs = f.system23Legs ?? [];
+        return legs.length === 3 && legs.every(l => l.bet && l.odd);
+      }
+      return f.bet && f.odd;
+    });
     if (!valid.length) return;
     setSaving(true);
     if (editId !== null) {
       const f = valid[0];
       const stakeU = unitValue ? (Number(f.stakeE) / unitValue).toFixed(3) : f.stakeU;
-      const entry = { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), book: f.book ?? "", already_accounted: f.alreadyAccounted ?? false };
+      const isSystem = (f.subCat ?? f.subcat) === "System 2/3";
+      const legs = f.system23Legs ?? [];
+      const sysResult = isSystem ? (() => {
+        const pairs = [[0,1],[0,2],[1,2]];
+        const anyPending = legs.some(l => !l.result || l.result === "Pending");
+        if (anyPending) return "Pending";
+        const anyWin = pairs.some(([i,j]) => legs[i].result === "Win" && legs[j].result === "Win");
+        return anyWin ? "Win" : "Lose";
+      })() : (f.result || "Pending");
+      const entry = { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: isSystem ? legs.map((l,i)=>`S${i+1}:${l.bet}@${l.odd}`).join(" | ") : f.bet, odd: isSystem ? 0 : Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: sysResult, note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), book: f.book ?? "", already_accounted: f.alreadyAccounted ?? false, system23_legs: isSystem ? JSON.stringify(legs) : null };
       const { error } = await supabase.from("bets").update(entry).eq("id", editId);
       if (!error) setBets(bets.map((b) => (b.id === editId ? { ...entry, id: editId } : b)));
       else alert("Error saving: " + error.message);
