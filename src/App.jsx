@@ -40,37 +40,37 @@ const useWindowWidth = () => {
 const SPORTS_CONFIG = {
   Tennis: {
     leagues: ["ATP", "WTA", "Mixed"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   Baseball: {
     leagues: ["MLB", "KBO"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   Soccer: {
     leagues: ["Ligue 1", "Ligue 2", "Ligue 3", "BPL", "Liga", "Primeira Liga", "Serie A", "Bundesliga", "Champions League", "Europa League", "Conference League", "World Cup", "MLS", "National Cup", "Exhibition", "Exotique"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   "US Football": {
     leagues: ["NFL"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Outright", "Parlay"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Outright", "Parlay", "System 2/3"],
   },
   Basketball: {
     leagues: ["NBA", "WNBA", "EuroLeague", "Autre"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Outright", "Parlay"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Outright", "Parlay", "System 2/3"],
   },
   Hockey: {
     leagues: ["NHL", "Magnus"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   MMA: {
     leagues: ["UFC"],
-    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright"],
+    subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
-  eSport: { leagues: ["CS2", "LoL", "Dota 2", "Mixed", "Autre"], subCats: ["ML", "AH", "O/U", "Boost", "Outright", "Parlay"] },
-  "Mixed Sports": { leagues: ["Mixed"], subCats: ["Boost", "Parlay"] },
-  "F1": { leagues: ["F1"], subCats: ["Boost", "Outright"] },
-  Cycling: { leagues: ["Tour de France", "Giro", "Vuelta", "Autre"], subCats: ["Boost", "Outright"] },
-  Athletism: { leagues: ["European Games", "World Games", "Olympic Games"], subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright"] },
+  eSport: { leagues: ["CS2", "LoL", "Dota 2", "Mixed", "Autre"], subCats: ["ML", "AH", "O/U", "Boost", "Outright", "Parlay", "System 2/3"] },
+  "Mixed Sports": { leagues: ["Mixed"], subCats: ["Boost", "Parlay", "System 2/3"] },
+  "F1": { leagues: ["F1"], subCats: ["Boost", "Outright", "System 2/3"] },
+  Cycling: { leagues: ["Tour de France", "Giro", "Vuelta", "Autre"], subCats: ["Boost", "Outright", "System 2/3"] },
+  Athletism: { leagues: ["European Games", "World Games", "Olympic Games"], subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"] },
 };
 
 const SPORTS = Object.keys(SPORTS_CONFIG);
@@ -148,10 +148,15 @@ const calcProfit = (bet, field = "E") => {
   const isAccounted = bet.alreadyAccounted ?? bet.already_accounted ?? false;
   const booster = Number(bet.comboBooster ?? bet.combo_booster ?? 0);
   const boostMult = 1 + booster / 100;
+  // System 2/3: calculate from legs
+  const legs = bet.system23Legs ?? bet.system23_legs ?? null;
+  if ((bet.subCat ?? bet.subcat) === "System 2/3" && legs?.length === 3) {
+    const p = calcSystem23Profit(legs, stake);
+    return p ?? 0; // 0 while pending
+  }
   if (bet.result === "Win") return isAccounted
-    ? Number(bet.odd) * stake * boostMult          // Already accounted: retour total (mise incluse)
-    : (Number(bet.odd) - 1) * stake * boostMult;  // Normal: gain net seulement
-  // Lose: accounted → 0 (mise déjà dans solde départ), FB → 0, normal → -stake
+    ? Number(bet.odd) * stake * boostMult
+    : (Number(bet.odd) - 1) * stake * boostMult;
   if (bet.result === "Lose") return (isAccounted || isFB) ? 0 : -stake;
   return 0;
 };
@@ -530,6 +535,7 @@ export default function App() {
         stakeU: Number(b.stakeu ?? 0),
         isFreebet: b.is_freebet ?? false,
         alreadyAccounted: b.already_accounted ?? false,
+        system23Legs: b.system23_legs ? (typeof b.system23_legs === "string" ? JSON.parse(b.system23_legs) : b.system23_legs) : null,
         comboBooster: Number(b.combo_booster ?? 0),
         book: b.book ?? "",
       })));
@@ -574,7 +580,7 @@ export default function App() {
         return { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), already_accounted: f.alreadyAccounted ?? false, book: f.book ?? "" };
       });
       const { data, error } = await supabase.from("bets").insert(newEntries).select();
-      if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0), isFreebet: b.is_freebet ?? false, alreadyAccounted: b.already_accounted ?? false, book: b.book ?? "" })), ...bets]);
+      if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0), isFreebet: b.is_freebet ?? false, alreadyAccounted: b.already_accounted ?? false, book: b.book ?? "", system23Legs: b.system23_legs ? (typeof b.system23_legs === "string" ? JSON.parse(b.system23_legs) : b.system23_legs) : null })), ...bets]);
       else alert("Error saving: " + error.message);
     }
     setBatchForms([emptyBetForm()]);
@@ -606,6 +612,7 @@ export default function App() {
       alreadyAccounted: bet.alreadyAccounted ?? bet.already_accounted ?? false,
       comboBooster: Number(bet.comboBooster ?? bet.combo_booster ?? 0) || "",
       book: bet.book ?? "",
+      system23Legs: bet.system23Legs ?? (bet.system23_legs ? (typeof bet.system23_legs === "string" ? JSON.parse(bet.system23_legs) : bet.system23_legs) : [emptyLeg(), emptyLeg(), emptyLeg()]),
     }]);
     setEditId(bet.id);
     setTab("add");
@@ -962,6 +969,7 @@ export default function App() {
 // ADD TAB
 // ════════════════════════════════════════════════════════════════════════════════
 
+const emptyLeg = () => ({ bet: "", odd: "", result: "Pending" });
 const emptyBetForm = (base = {}) => ({
   date: base.date ?? today(),
   sport: base.sport ?? "Tennis",
@@ -977,7 +985,37 @@ const emptyBetForm = (base = {}) => ({
   alreadyAccounted: false,
   comboBooster: "",
   book: base.book ?? "PS3838",
+  system23Legs: [emptyLeg(), emptyLeg(), emptyLeg()],
 });
+
+// Calculate System 2/3 profit given 3 legs and total stake
+const calcSystem23Profit = (legs, totalStakeE) => {
+  const stakePerDoublet = totalStakeE / 3;
+  const pairs = [[0,1],[0,2],[1,2]];
+  let totalReturn = 0;
+  let anySettled = legs.some(l => l.result !== "Pending");
+  if (!anySettled) return null; // still pending
+
+  for (const [i, j] of pairs) {
+    const a = legs[i], b = legs[j];
+    // A doublet wins only if both legs win
+    if (a.result === "Win" && b.result === "Win") {
+      totalReturn += stakePerDoublet * Number(a.odd) * Number(b.odd);
+    }
+    // Void leg: treat as cote 1 (push)
+    else if (a.result === "Void" && b.result === "Win") {
+      totalReturn += stakePerDoublet * Number(b.odd);
+    }
+    else if (a.result === "Win" && b.result === "Void") {
+      totalReturn += stakePerDoublet * Number(a.odd);
+    }
+    else if (a.result === "Void" && b.result === "Void") {
+      totalReturn += stakePerDoublet; // full refund of that doublet
+    }
+    // Lose or Pending in either leg = doublet lost
+  }
+  return totalReturn - totalStakeE;
+};
 
 function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
   const cfg = SPORTS_CONFIG[form.sport] ?? { leagues: [], subCats: [] };
@@ -1046,13 +1084,63 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
         </div>
       </div>
 
-      {/* Bet description */}
-      <Input placeholder="e.g. Djokovic vs Alcaraz ML" value={form.bet} onChange={(e) => set("bet", e.target.value)} />
+      {/* System 2/3 legs */}
+      {form.subCat === "System 2/3" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1 }}>
+            3 Sélections <span style={{ color: T.text3, textTransform: "none", fontSize: 9 }}>(3 doublés × mise/3)</span>
+          </div>
+          {(form.system23Legs ?? [emptyLeg(),emptyLeg(),emptyLeg()]).map((leg, i) => (
+            <div key={i} style={{ background: T.card2, borderRadius: 8, padding: "10px 10px", border: `1px solid ${T.border}`, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontSize: 10, color: T.accent, fontWeight: 700, letterSpacing: 1 }}>Sél. {i + 1}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 6 }}>
+                <input
+                  placeholder={`Sélection ${i+1}`}
+                  value={leg.bet}
+                  onChange={e => { const legs = [...(form.system23Legs ?? [emptyLeg(),emptyLeg(),emptyLeg()])]; legs[i] = {...legs[i], bet: e.target.value}; set("system23Legs", legs); }}
+                  style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px 10px", color: T.text, fontSize: 12, outline: "none", boxSizing: "border-box" }}
+                />
+                <input
+                  type="number" step="0.001" placeholder="Cote"
+                  value={leg.odd}
+                  onChange={e => { const legs = [...(form.system23Legs ?? [emptyLeg(),emptyLeg(),emptyLeg()])]; legs[i] = {...legs[i], odd: e.target.value}; set("system23Legs", legs); }}
+                  style={{ width: 70, background: T.card, border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px 8px", color: T.text, fontSize: 12, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" }}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 5 }}>
+                {RESULTS.map(r => (
+                  <button key={r} onClick={() => { const legs = [...(form.system23Legs ?? [emptyLeg(),emptyLeg(),emptyLeg()])]; legs[i] = {...legs[i], result: r}; set("system23Legs", legs); }}
+                    style={{ flex: 1, background: leg.result === r ? (RESULT_COLORS[r] + "33") : T.card, border: `1px solid ${leg.result === r ? RESULT_COLORS[r] : T.border}`, borderRadius: 6, padding: "5px 4px", color: leg.result === r ? RESULT_COLORS[r] : T.text3, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          {/* System profit preview */}
+          {(() => {
+            const legs = form.system23Legs ?? [];
+            const p = calcSystem23Profit(legs, Number(form.stakeE ?? 0));
+            if (p === null) return null;
+            return (
+              <div style={{ background: p >= 0 ? T.win + "15" : T.lose + "15", border: `1px solid ${p >= 0 ? T.win : T.lose}44`, borderRadius: 8, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 11, color: T.text2 }}>Gain net estimé</span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: p >= 0 ? T.win : T.lose }}>{p >= 0 ? "+" : ""}{p.toFixed(2)}€</span>
+              </div>
+            );
+          })()}
+        </div>
+      ) : (
+        <>
+          {/* Bet description */}
+          <Input placeholder="e.g. Djokovic vs Alcaraz ML" value={form.bet} onChange={(e) => set("bet", e.target.value)} />
+        </>
+      )}
 
       {/* Odd + Stakes */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-        <Input label="Odd" type="number" step="0.001" placeholder="2.100" value={form.odd} onChange={(e) => set("odd", e.target.value)} />
-        <Input label="Stake €" type="number" value={form.stakeE} onChange={(e) => set("stakeE", e.target.value)} />
+      <div style={{ display: "grid", gridTemplateColumns: form.subCat === "System 2/3" ? "1fr 1fr" : "1fr 1fr 1fr", gap: 8 }}>
+        {form.subCat !== "System 2/3" && <Input label="Odd" type="number" step="0.001" placeholder="2.100" value={form.odd} onChange={(e) => set("odd", e.target.value)} />}
+        <Input label="Stake € (total)" type="number" value={form.stakeE} onChange={(e) => set("stakeE", e.target.value)} />
         <div>
           <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Stake u</div>
           {computedU
@@ -1063,8 +1151,8 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
         </div>
       </div>
 
-      {/* Combo Booster - only for Parlay */}
-      {form.subCat === "Parlay" && (
+      {/* Combo Booster - only for Parlay (not System 2/3) */}
+      {form.subCat === "Parlay" && form.subCat !== "System 2/3" && (
         <div>
           <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>
             Combo Booster % <span style={{ color: T.text3, fontSize: 9, textTransform: "none" }}>(optionnel)</span>
