@@ -566,7 +566,7 @@ export default function App() {
     const valid = batchForms.filter(f => {
       if ((f.subCat ?? f.subcat) === "System 2/3") {
         const legs = f.system23Legs ?? [];
-        return legs.length === 3 && legs.every(l => l.bet && l.odd);
+        return f.bet && legs.length === 3 && legs.every(l => l.bet && l.odd);
       }
       return f.bet && f.odd;
     });
@@ -584,7 +584,7 @@ export default function App() {
         const anyWin = pairs.some(([i,j]) => legs[i].result === "Win" && legs[j].result === "Win");
         return anyWin ? "Win" : "Lose";
       })() : (f.result || "Pending");
-      const entry = { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: isSystem ? legs.map((l,i)=>`S${i+1}:${l.bet}@${l.odd}`).join(" | ") : f.bet, odd: isSystem ? 0 : Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: sysResult, note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), book: f.book ?? "", already_accounted: f.alreadyAccounted ?? false, system23_legs: isSystem ? JSON.stringify(legs) : null };
+      const entry = { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: isSystem ? 0 : Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: sysResult, note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), book: f.book ?? "", already_accounted: f.alreadyAccounted ?? false, system23_legs: isSystem ? JSON.stringify(legs) : null };
       const { error } = await supabase.from("bets").update(entry).eq("id", editId);
       if (!error) setBets(bets.map((b) => (b.id === editId ? { ...entry, id: editId } : b)));
       else alert("Error saving: " + error.message);
@@ -1102,6 +1102,8 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
       {/* System 2/3 legs */}
       {form.subCat === "System 2/3" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {/* Global title */}
+          <Input placeholder="Titre du système (ex: System Djoko/Alcaraz/Sinner)" value={form.bet} onChange={(e) => set("bet", e.target.value)} />
           <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1 }}>
             3 Sélections <span style={{ color: T.text3, textTransform: "none", fontSize: 9 }}>(3 doublés × mise/3)</span>
           </div>
