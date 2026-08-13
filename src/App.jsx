@@ -671,6 +671,7 @@ export default function App() {
       s.bets.push(b);
       if (b.result === "Win") { s.wins++; s.profitE += calcProfit(b, "E"); s.profitU += calcProfit(b, "U"); }
       else if (b.result === "Lose") { s.profitE += calcProfit(b, "E"); s.profitU += calcProfit(b, "U"); }
+      else if (b.result === "Cashout") { s.profitE += calcProfit(b, "E"); s.profitU += calcProfit(b, "U"); }
       if (b.result !== "Void") {
         const isFB = b.isFreebet ?? b.is_freebet ?? false;
         const isAcc = b.alreadyAccounted ?? b.already_accounted ?? false;
@@ -703,6 +704,7 @@ export default function App() {
       if (b.result !== "Void" && b.result !== "Pending") settled++;
       if (b.result === "Win") { wins++; profitE += calcProfit(b, "E"); profitU += calcProfit(b, "U"); }
       else if (b.result === "Lose") { profitE += calcProfit(b, "E"); profitU += calcProfit(b, "U"); }
+      else if (b.result === "Cashout") { profitE += calcProfit(b, "E"); profitU += calcProfit(b, "U"); }
       if (b.result !== "Void") {
         const isFBt = b.isFreebet ?? b.is_freebet ?? false;
         const isAcct = b.alreadyAccounted ?? b.already_accounted ?? false;
