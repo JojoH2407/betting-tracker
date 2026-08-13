@@ -39,38 +39,38 @@ const useWindowWidth = () => {
 // ── SPORTS CONFIG ─────────────────────────────────────────────────────────────
 const SPORTS_CONFIG = {
   Tennis: {
-    leagues: ["ATP", "WTA", "Mixed"],
+    leagues: ["ATP", "WTA", "Mixed", "PreSeason"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   Baseball: {
-    leagues: ["MLB", "KBO"],
+    leagues: ["MLB", "KBO", "PreSeason"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   Soccer: {
-    leagues: ["Ligue 1", "Ligue 2", "Ligue 3", "BPL", "Liga", "Primeira Liga", "Serie A", "Bundesliga", "Champions League", "Europa League", "Conference League", "World Cup", "MLS", "National Cup", "Exhibition", "Exotique"],
+    leagues: ["Ligue 1", "Ligue 2", "Ligue 3", "BPL", "Liga", "Primeira Liga", "Serie A", "Bundesliga", "Champions League", "Europa League", "Conference League", "World Cup", "MLS", "National Cup", "Exhibition", "Exotique", "PreSeason"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   "US Football": {
-    leagues: ["NFL"],
+    leagues: ["NFL", "PreSeason"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Outright", "Parlay", "System 2/3"],
   },
   Basketball: {
-    leagues: ["NBA", "WNBA", "EuroLeague", "Autre"],
+    leagues: ["NBA", "WNBA", "EuroLeague", "Autre", "PreSeason"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Outright", "Parlay", "System 2/3"],
   },
   Hockey: {
-    leagues: ["NHL", "Magnus"],
+    leagues: ["NHL", "Magnus", "PreSeason"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   MMA: {
-    leagues: ["UFC"],
+    leagues: ["UFC", "PreSeason"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
-  eSport: { leagues: ["CS2", "LoL", "Dota 2", "Mixed", "Autre"], subCats: ["ML", "AH", "O/U", "Boost", "Outright", "Parlay", "System 2/3"] },
-  "Mixed Sports": { leagues: ["Mixed"], subCats: ["Boost", "Parlay", "System 2/3"] },
-  "F1": { leagues: ["F1"], subCats: ["Boost", "Outright", "System 2/3"] },
-  Cycling: { leagues: ["Tour de France", "Giro", "Vuelta", "Autre"], subCats: ["Boost", "Outright", "System 2/3"] },
-  Athletism: { leagues: ["European Games", "World Games", "Olympic Games"], subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"] },
+  eSport: { leagues: ["CS2", "LoL", "Dota 2", "Mixed", "Autre", "PreSeason"], subCats: ["ML", "AH", "O/U", "Boost", "Outright", "Parlay", "System 2/3"] },
+  "Mixed Sports": { leagues: ["Mixed", "PreSeason"], subCats: ["Boost", "Parlay", "System 2/3"] },
+  "F1": { leagues: ["F1", "PreSeason"], subCats: ["Boost", "Outright", "System 2/3"] },
+  Cycling: { leagues: ["Tour de France", "Giro", "Vuelta", "Autre", "PreSeason"], subCats: ["Boost", "Outright", "System 2/3"] },
+  Athletism: { leagues: ["European Games", "World Games", "Olympic Games", "PreSeason"], subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"] },
 };
 
 const SPORTS = Object.keys(SPORTS_CONFIG);
