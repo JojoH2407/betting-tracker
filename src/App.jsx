@@ -89,13 +89,14 @@ const BOOK_COLORS = {
   Autre:       { bg: "#334155", text: "#e2e8f0", accent: "#94a3b8" }, // Neutral slate
 };
 const bookColor = (book) => BOOK_COLORS[book] ?? { bg: "#1e293b", text: "#e2e8f0", accent: "#38bdf8" };
-const RESULTS = ["Pending", "Win", "Lose", "Void"];
+const RESULTS = ["Pending", "Win", "Lose", "Void", "Cashout"];
 
 const RESULT_COLORS = {
   Win: "#22c55e",
   Lose: "#ef4444",
   Void: "#94a3b8",
   Pending: "#f59e0b",
+  Cashout: "#06b6d4",
 };
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -153,6 +154,13 @@ const calcProfit = (bet, field = "E") => {
   if ((bet.subCat ?? bet.subcat) === "System 2/3" && legs?.length === 3) {
     const p = calcSystem23Profit(legs, stake);
     return p ?? 0; // 0 while pending
+  }
+  if (bet.result === "Cashout") {
+    // Cashout: use cashoutAmount directly as net profit (can be negative or positive)
+    const co = field === "E"
+      ? Number(bet.cashoutAmount ?? bet.cashout_amount ?? 0)
+      : Number(bet.cashoutAmountU ?? (bet.cashoutAmount ?? bet.cashout_amount ?? 0) / 60);
+    return co;
   }
   if (bet.result === "Win") return isAccounted
     ? Number(bet.odd) * stake * boostMult
@@ -536,6 +544,7 @@ export default function App() {
         isFreebet: b.is_freebet ?? false,
         alreadyAccounted: b.already_accounted ?? false,
         system23Legs: b.system23_legs ? (typeof b.system23_legs === "string" ? JSON.parse(b.system23_legs) : b.system23_legs) : null,
+        cashoutAmount: b.cashout_amount ?? "",
         comboBooster: Number(b.combo_booster ?? 0),
         book: b.book ?? "",
       })));
@@ -584,7 +593,7 @@ export default function App() {
         const anyWin = pairs.some(([i,j]) => legs[i].result === "Win" && legs[j].result === "Win");
         return anyWin ? "Win" : "Lose";
       })() : (f.result || "Pending");
-      const entry = { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: isSystem ? 0 : Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: sysResult, note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), book: f.book ?? "", already_accounted: f.alreadyAccounted ?? false, system23_legs: isSystem ? JSON.stringify(legs) : null };
+      const entry = { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: isSystem ? 0 : Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: sysResult, note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), book: f.book ?? "", already_accounted: f.alreadyAccounted ?? false, system23_legs: isSystem ? JSON.stringify(legs) : null, cashout_amount: f.result === "Cashout" ? Number(f.cashoutAmount ?? 0) : null };
       const { error } = await supabase.from("bets").update(entry).eq("id", editId);
       if (!error) setBets(bets.map((b) => (b.id === editId ? { ...entry, id: editId } : b)));
       else alert("Error saving: " + error.message);
@@ -595,7 +604,7 @@ export default function App() {
         return { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), already_accounted: f.alreadyAccounted ?? false, book: f.book ?? "" };
       });
       const { data, error } = await supabase.from("bets").insert(newEntries).select();
-      if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0), isFreebet: b.is_freebet ?? false, alreadyAccounted: b.already_accounted ?? false, book: b.book ?? "", system23Legs: b.system23_legs ? (typeof b.system23_legs === "string" ? JSON.parse(b.system23_legs) : b.system23_legs) : null })), ...bets]);
+      if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0), isFreebet: b.is_freebet ?? false, alreadyAccounted: b.already_accounted ?? false, book: b.book ?? "", system23Legs: b.system23_legs ? (typeof b.system23_legs === "string" ? JSON.parse(b.system23_legs) : b.system23_legs) : null, cashoutAmount: b.cashout_amount ?? "" })), ...bets]);
       else alert("Error saving: " + error.message);
     }
     setBatchForms([emptyBetForm()]);
@@ -628,6 +637,7 @@ export default function App() {
       comboBooster: Number(bet.comboBooster ?? bet.combo_booster ?? 0) || "",
       book: bet.book ?? "",
       system23Legs: bet.system23Legs ?? (bet.system23_legs ? (typeof bet.system23_legs === "string" ? JSON.parse(bet.system23_legs) : bet.system23_legs) : [emptyLeg(), emptyLeg(), emptyLeg()]),
+      cashoutAmount: bet.cashoutAmount ?? bet.cashout_amount ?? "",
     }]);
     setEditId(bet.id);
     setTab("add");
@@ -798,6 +808,7 @@ export default function App() {
         is_freebet: rest.isFreebet ?? false,
         already_accounted: rest.alreadyAccounted ?? false,
         book: rest.book ?? "",
+        cashout_amount: rest.cashoutAmount ?? null,
         combo_booster: Number(rest.comboBooster ?? rest.combo_booster ?? 0),
       }));
       const { data, error } = await supabase.from("bets").insert(toInsert).select();
@@ -1001,6 +1012,7 @@ const emptyBetForm = (base = {}) => ({
   comboBooster: "",
   book: base.book ?? "PS3838",
   system23Legs: [emptyLeg(), emptyLeg(), emptyLeg()],
+  cashoutAmount: "",
 });
 
 // Calculate System 2/3 profit given 3 legs and total stake
@@ -1269,6 +1281,28 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
           {RESULTS.map((r) => <Chip key={r} label={r} active={form.result === r} onClick={() => set("result", r)} color={RESULT_COLORS[r]} />)}
         </div>
       </div>
+
+      {/* Cashout amount — shown only when Cashout is selected */}
+      {form.result === "Cashout" && (
+        <div style={{ background: "#06b6d415", border: "1px solid #06b6d440", borderRadius: 8, padding: "10px 12px" }}>
+          <div style={{ fontSize: 10, color: "#06b6d4", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>
+            Montant net du cashout
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="number" step="0.01"
+              placeholder="ex: -15.00 si perte, +20.00 si gain"
+              value={form.cashoutAmount}
+              onChange={e => set("cashoutAmount", e.target.value)}
+              style={{ flex: 1, background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px 10px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box" }}
+            />
+            <span style={{ fontSize: 13, color: T.text2 }}>€</span>
+          </div>
+          <div style={{ fontSize: 10, color: T.text3, marginTop: 6 }}>
+            Saisis le gain net : négatif si tu as perdu de l'argent, positif si tu en as gagné
+          </div>
+        </div>
+      )}
 
       {/* Note */}
       <Input label="Note (optional)" placeholder="Analysis, context..." value={form.note} onChange={(e) => set("note", e.target.value)} />
