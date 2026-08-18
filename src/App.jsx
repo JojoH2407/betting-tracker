@@ -39,7 +39,7 @@ const useWindowWidth = () => {
 // ── SPORTS CONFIG ─────────────────────────────────────────────────────────────
 const SPORTS_CONFIG = {
   Tennis: {
-    leagues: ["ATP", "WTA", "Mixed", "PreSeason"],
+    leagues: ["ATP", "WTA", "Mixed", "PreSeason","Challenger","ITF"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   Baseball: {
