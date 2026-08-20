@@ -523,6 +523,9 @@ export default function App() {
 
   const [batchForms, setBatchForms] = useState([emptyBetForm()]);
 
+  // unit value from global bankroll config — must be before useEffect that uses it
+  const unitValue = bankroll.global?.unitValue ?? null;
+
   // Update default stakeE when unitValue loads from Supabase
   useEffect(() => {
     if (!unitValue) return;
@@ -574,9 +577,6 @@ export default function App() {
     };
     fetchAll();
   }, []);
-
-  // unit value from global bankroll config
-  const unitValue = bankroll.global?.unitValue ?? null;
 
   const handleSaveAll = async () => {
     if (saving) return;
