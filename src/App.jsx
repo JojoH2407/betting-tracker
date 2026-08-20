@@ -39,7 +39,7 @@ const useWindowWidth = () => {
 // ── SPORTS CONFIG ─────────────────────────────────────────────────────────────
 const SPORTS_CONFIG = {
   Tennis: {
-    leagues: ["ATP", "WTA", "Mixed", "PreSeason"],
+    leagues: ["ATP", "WTA", "Mixed","Challenger","ITF", "PreSeason"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   Baseball: {
@@ -47,7 +47,7 @@ const SPORTS_CONFIG = {
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   Soccer: {
-    leagues: ["Ligue 1", "Ligue 2", "Ligue 3", "BPL", "Liga", "Primeira Liga", "Serie A", "Bundesliga", "Champions League", "Europa League", "Conference League", "World Cup", "MLS", "National Cup", "Exhibition", "Exotique", "PreSeason"],
+    leagues: ["Ligue 1", "Ligue 2", "Ligue 3", "BPL","Championship", "Liga","Liga 2", "Primeira Liga", "Serie A", "Serie B","Bundesliga", "Champions League", "Europa League", "Conference League", "World Cup", "MLS", "National Cup", "Exhibition", "Exotique", "PreSeason"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   "US Football": {
