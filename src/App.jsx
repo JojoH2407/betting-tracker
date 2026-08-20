@@ -39,7 +39,7 @@ const useWindowWidth = () => {
 // ── SPORTS CONFIG ─────────────────────────────────────────────────────────────
 const SPORTS_CONFIG = {
   Tennis: {
-    leagues: ["ATP", "WTA", "Mixed", "PreSeason","Challenger","ITF"],
+    leagues: ["ATP", "WTA", "Mixed", "PreSeason"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   Baseball: {
@@ -47,7 +47,7 @@ const SPORTS_CONFIG = {
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   Soccer: {
-    leagues: ["Ligue 1", "Ligue 2", "Ligue 3", "BPL", "Liga", "Primeira Liga", "Serie A", "Bundesliga","Bundesliga 2","Champions League", "Europa League", "Conference League", "World Cup", "MLS", "National Cup","Saudi Pro League" ,"Exhibition", "Exotique", "PreSeason"],
+    leagues: ["Ligue 1", "Ligue 2", "Ligue 3", "BPL", "Liga", "Primeira Liga", "Serie A", "Bundesliga", "Champions League", "Europa League", "Conference League", "World Cup", "MLS", "National Cup", "Exhibition", "Exotique", "PreSeason"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   "US Football": {
@@ -607,7 +607,7 @@ export default function App() {
       if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0), isFreebet: b.is_freebet ?? false, alreadyAccounted: b.already_accounted ?? false, book: b.book ?? "", system23Legs: b.system23_legs ? (typeof b.system23_legs === "string" ? JSON.parse(b.system23_legs) : b.system23_legs) : null, cashoutAmount: b.cashout_amount ?? "" })), ...bets]);
       else alert("Error saving: " + error.message);
     }
-    setBatchForms([emptyBetForm()]);
+    setBatchForms([emptyBetForm({}, unitValue)]);
     const targetDate = valid[0]?.date ?? today();
     setScrollToDate(targetDate);
     setTab("list");
@@ -898,7 +898,7 @@ export default function App() {
               <div className="hide-scroll" style={{ paddingBottom: 8 }}>
                 <AddTab batchForms={batchForms} setBatchForms={setBatchForms}
                   handleSaveAll={handleSaveAll} editId={editId} setEditId={setEditId}
-                  setTab={setTab} emptyForm={emptyBetForm()} unitValue={unitValue}
+                  setTab={setTab} emptyForm={emptyBetForm({}, unitValue)} unitValue={unitValue}
                   isDesktop={true} saving={saving} />
               </div>
             </div>
@@ -931,7 +931,7 @@ export default function App() {
           {tab === "add" && (
             <AddTab batchForms={batchForms} setBatchForms={setBatchForms}
               handleSaveAll={handleSaveAll} editId={editId} setEditId={setEditId}
-              setTab={setTab} emptyForm={emptyBetForm()} unitValue={unitValue}
+              setTab={setTab} emptyForm={emptyBetForm({}, unitValue)} unitValue={unitValue}
               saving={saving} />
           )}
           {tab === "list" && (
@@ -998,14 +998,14 @@ export default function App() {
 // ════════════════════════════════════════════════════════════════════════════════
 
 const emptyLeg = () => ({ bet: "", odd: "", result: "Pending" });
-const emptyBetForm = (base = {}) => ({
+const emptyBetForm = (base = {}, uv = null) => ({
   date: base.date ?? today(),
   sport: base.sport ?? "Tennis",
   league: base.league ?? "ATP",
   subCat: base.subCat ?? "ML",
   bet: "",
   odd: "",
-  stakeE: base.stakeE ?? 60,
+  stakeE: base.stakeE ?? (uv ?? 60),
   stakeU: base.stakeU ?? "",
   result: "Pending",
   note: "",
@@ -1280,7 +1280,7 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
       <div>
         <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Result</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {RESULTS.map((r) => <Chip key={r} label={r} active={form.result === r} onClick={() => set("result", r)} color={RESULT_COLORS[r]} />)}
+          {RESULTS.filter(r => !(r === "Cashout" && form.isFreebet)).map((r) => <Chip key={r} label={r} active={form.result === r} onClick={() => set("result", r)} color={RESULT_COLORS[r]} />)}
         </div>
       </div>
 
@@ -1315,7 +1315,7 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
 function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, setTab, emptyForm, unitValue, isDesktop, saving }) {
   const addForm = () => {
     const last = batchForms[batchForms.length - 1];
-    setBatchForms([...batchForms, emptyBetForm({ date: last.date, sport: last.sport, league: last.league, subCat: last.subCat, stakeE: last.stakeE, stakeU: last.stakeU })]);
+    setBatchForms([...batchForms, emptyBetForm({ date: last.date, sport: last.sport, league: last.league, subCat: last.subCat, stakeE: last.stakeE, stakeU: last.stakeU }, unitValue)]);
   };
   const updateForm = (i, val) => setBatchForms(batchForms.map((f, idx) => idx === i ? val : f));
   const removeForm = (i) => setBatchForms(batchForms.filter((_, idx) => idx !== i));
@@ -1328,7 +1328,7 @@ function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, s
         <div style={{ fontSize: 10, fontWeight: 700, color: T.text3, textTransform: "uppercase", letterSpacing: 2 }}>
           {editId ? "Edit Bet" : `New Bet${batchForms.length > 1 ? "s (" + batchForms.length + ")" : ""}`}
         </div>
-        {editId && <button onClick={() => { setEditId(null); setBatchForms([emptyBetForm()]); setTab("list"); }} style={{ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 12 }}>Cancel</button>}
+        {editId && <button onClick={() => { setEditId(null); setBatchForms([emptyBetForm({}, unitValue)]); setTab("list"); }} style={{ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 12 }}>Cancel</button>}
       </div>
 
       {batchForms.map((f, i) => (
@@ -1344,7 +1344,7 @@ function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, s
 
       <div style={{ display: "flex", gap: 10, marginTop: 8, position: isDesktop ? "relative" : "sticky", bottom: isDesktop ? "auto" : 90 }}>
         {editId && (
-          <button onClick={() => { setEditId(null); setBatchForms([emptyBetForm()]); setTab("list"); }}
+          <button onClick={() => { setEditId(null); setBatchForms([emptyBetForm({}, unitValue)]); setTab("list"); }}
             style={{ flex: 1, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 12, padding: "12px", color: T.text2, fontSize: 14, fontWeight: 600, cursor: "pointer", letterSpacing: 0.3 }}>
             Cancel
           </button>
@@ -2057,10 +2057,15 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
     const profitUpTo = bets
       .filter(b => b.date >= initialDate && b.date <= upToDate)
       .reduce((a, b) => a + calcProfit(b, "E"), 0);
+    // Global movements (deposits/withdrawals entered in Bankroll tab)
     const movsUpTo = movements
       .filter(m => m.date >= initialDate && m.date <= upToDate)
       .reduce((a, m) => a + (m.type === "deposit" ? Number(m.amount) : -Number(m.amount)), 0);
-    return initial + profitUpTo + movsUpTo;
+    // Book movements (deposits/withdrawals entered in By Book tab)
+    const bookMovsUpTo = Object.values(bookConfig ?? {}).flatMap(cfg => cfg.movements ?? [])
+      .filter(m => m.date >= initialDate && m.date <= upToDate)
+      .reduce((a, m) => a + (m.type === "deposit" ? Number(m.amount) : -Number(m.amount)), 0);
+    return initial + profitUpTo + movsUpTo + bookMovsUpTo;
   };
 
   // Balance at end of month
