@@ -523,6 +523,14 @@ export default function App() {
 
   const [batchForms, setBatchForms] = useState([emptyBetForm()]);
 
+  // Update default stakeE when unitValue loads from Supabase
+  useEffect(() => {
+    if (!unitValue) return;
+    setBatchForms(prev => prev.map(f =>
+      f.stakeE === 60 || f.stakeE === "" ? { ...f, stakeE: unitValue } : f
+    ));
+  }, [unitValue]);
+
   const updateBets = (next) => { setBets(next); };
   const updateBankroll = async (next) => {
     setBankrollState(next);
