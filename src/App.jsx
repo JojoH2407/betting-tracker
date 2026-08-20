@@ -2061,7 +2061,7 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
     const movsUpTo = movements
       .filter(m => m.date >= initialDate && m.date <= upToDate)
       .reduce((a, m) => a + (m.type === "deposit" ? Number(m.amount) : -Number(m.amount)), 0);
-    // Book movements (deposits/withdrawals entered in By Book tab)
+    // Book movements (withdrawals/deposits in By Book tab = real cash in/out)
     const bookMovsUpTo = Object.values(bookConfig ?? {}).flatMap(cfg => cfg.movements ?? [])
       .filter(m => m.date >= initialDate && m.date <= upToDate)
       .reduce((a, m) => a + (m.type === "deposit" ? Number(m.amount) : -Number(m.amount)), 0);
@@ -2307,9 +2307,7 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
                   </div>
                 )}
 
-                <button onClick={() => setShowMovModal(true)} style={{ width: "100%", background: "transparent", border: `1px dashed ${T.border2}`, borderRadius: 8, padding: "8px", color: T.text3, fontSize: 12, cursor: "pointer" }}>
-                  + Dépôt / Retrait
-                </button>
+
               </>
             ) : (
               <div style={{ color: T.text3, textAlign: "center", padding: "20px 0", fontSize: 13 }}>
@@ -2321,6 +2319,52 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
           {/* FREEBET WALLET CARD */}
           <FBWalletCard currentFBWallet={currentFBWallet} globalBk={globalBk} bets={bets} fbAdditions={fbAdditions} addFBMovement={addFBMovement} deleteFBMovement={deleteFBMovement} />
 
+
+          {/* ALL MOVEMENTS SYNTHESIS */}
+          {(() => {
+            const allMoves = [
+              // Global movements (if any remain)
+              ...(movements ?? []).map(m => ({ ...m, source: "Global" })),
+              // Book movements
+              ...Object.entries(bookConfig ?? {}).flatMap(([book, cfg]) =>
+                (cfg.movements ?? []).map(m => ({ ...m, source: book }))
+              ),
+            ].sort((a, b) => a.date.localeCompare(b.date));
+            if (allMoves.length === 0) return null;
+            const totalOut = allMoves.filter(m => m.type === "withdrawal").reduce((a, m) => a + Number(m.amount), 0);
+            const totalIn = allMoves.filter(m => m.type === "deposit").reduce((a, m) => a + Number(m.amount), 0);
+            return (
+              <div style={{ background: T.card, borderRadius: 12, padding: "14px", border: `1px solid ${T.border}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, color: T.text2, textTransform: "uppercase", letterSpacing: 1 }}>Mouvements cash</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: (totalIn - totalOut) >= 0 ? T.win : T.lose }}>
+                    {(totalIn - totalOut) >= 0 ? "+" : ""}{(totalIn - totalOut).toFixed(2)}€ net
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+                  <div style={{ background: T.card2, borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+                    <div style={{ fontSize: 10, color: T.text3, marginBottom: 2 }}>Dépôts</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: T.win }}>+{totalIn.toFixed(2)}€</div>
+                  </div>
+                  <div style={{ background: T.card2, borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+                    <div style={{ fontSize: 10, color: T.text3, marginBottom: 2 }}>Retraits</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: T.lose }}>-{totalOut.toFixed(2)}€</div>
+                  </div>
+                </div>
+                {allMoves.map((m, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", fontSize: 12, borderBottom: `1px solid ${T.border}` }}>
+                    <div style={{ color: T.text3, display: "flex", gap: 6, alignItems: "center" }}>
+                      <span style={{ fontSize: 10, background: T.card2, borderRadius: 4, padding: "1px 6px", color: T.text2 }}>{m.source}</span>
+                      <span>{m.date}{m.note ? ` · ${m.note}` : ""}</span>
+                    </div>
+                    <span style={{ fontWeight: 700, color: m.type === "deposit" ? T.win : T.lose }}>
+                      {m.type === "deposit" ? "+" : "-"}{Number(m.amount).toFixed(2)}€
+                    </span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* MONTHLY BREAKDOWN */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
