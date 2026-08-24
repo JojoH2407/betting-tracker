@@ -39,7 +39,7 @@ const useWindowWidth = () => {
 // ── SPORTS CONFIG ─────────────────────────────────────────────────────────────
 const SPORTS_CONFIG = {
   Tennis: {
-    leagues: ["ATP", "WTA", "Mixed","Challenger","ITF", "PreSeason"],
+    leagues: ["ATP", "WTA", "Challenger", "ITF", "Mixed", "PreSeason"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   Baseball: {
@@ -47,7 +47,7 @@ const SPORTS_CONFIG = {
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   Soccer: {
-    leagues: ["Ligue 1", "Ligue 2", "Ligue 3", "BPL","Championship", "Liga","Liga 2", "Primeira Liga", "Serie A", "Serie B","Bundesliga","Bundesliga 2", "Champions League", "Europa League", "Conference League", "World Cup", "MLS", "National Cup", "Exhibition", "Exotique", "PreSeason"],
+    leagues: ["Ligue 1", "Ligue 2", "Ligue 3", "BPL", "Liga", "Liga 2", "Primeira Liga", "Serie A", "Bundesliga", "Bundesliga 2", "Saudi Pro League", "Champions League", "Europa League", "Conference League", "World Cup", "MLS", "National Cup", "Exhibition", "Exotique", "PreSeason"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   "US Football": {
@@ -928,7 +928,7 @@ export default function App() {
             {tab !== "add" && (
               <div>
                 {tab === "list" && <ListTab bets={filtered} onEdit={startEdit} onDelete={setDeleteConfirm} onUpdateResult={handleUpdateResult} onExport={() => exportXLSX(bets)} onImport={handleCSVImport} filterMonth={filterMonth} scrollToDate={scrollToDate} onScrollDone={() => setScrollToDate(null)} onDeleteAll={() => { if (filterMonth === "all") { supabase.from("bets").delete().neq("id","00000000-0000-0000-0000-000000000000").then(() => setBets([])); } else { const ids = bets.filter(b => monthKey(b.date) === filterMonth).map(b => b.id); supabase.from("bets").delete().in("id", ids).then(() => setBets(bets.filter(b => monthKey(b.date) !== filterMonth))); }}} />}
-                {tab === "stats" && <StatsTab total={total} bySport={bySport} byLeague={byLeague} maxProfitAbs={maxProfitAbs} bkChartData={bkChartData} bankroll={bankroll} updateBankroll={updateBankroll} allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab} bets={bets} dailyChartData={dailyChartData} oddsRanges={oddsRanges} filterMonth={filterMonth} bySubCat={bySubCat} byBook={byBook} bookConfig={bookConfig} updateBookConfig={updateBookConfig} />}
+                {tab === "stats" && <StatsTab total={total} bySport={bySport} byLeague={byLeague} maxProfitAbs={maxProfitAbs} bkChartData={bkChartData} bankroll={bankroll} updateBankroll={updateBankroll} allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab} bets={bets} setBets={setBets} dailyChartData={dailyChartData} oddsRanges={oddsRanges} filterMonth={filterMonth} bySubCat={bySubCat} byBook={byBook} bookConfig={bookConfig} updateBookConfig={updateBookConfig} />}
               </div>
             )}
             {tab === "add" && <div style={{ color: T.text3, textAlign: "center", padding: 40 }}>Filling form on the left →</div>}
@@ -2016,7 +2016,7 @@ function FBWalletCard({ currentFBWallet, globalBk, bets, fbAdditions, addFBMovem
 // ════════════════════════════════════════════════════════════════════════════════
 // STATS TAB
 // ════════════════════════════════════════════════════════════════════════════════
-function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bkChartData, bankroll, updateBankroll, allMonths, statsTab, setStatsTab, bets, dailyChartData, oddsRanges, filterMonth, bookConfig, updateBookConfig }) {
+function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bkChartData, bankroll, updateBankroll, allMonths, statsTab, setStatsTab, bets, setBets, dailyChartData, oddsRanges, filterMonth, bookConfig, updateBookConfig }) {
   const [showShare, setShowShare] = useState(false);
 
   // ── NEW BANKROLL MODEL ────────────────────────────────────────────────────────
@@ -2027,6 +2027,7 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
   // ─────────────────────────────────────────────────────────────────────────────
 
   const [showBkSetup, setShowBkSetup] = useState(false);
+  const [showFullReset, setShowFullReset] = useState(false);
   const [bkSetupForm, setBkSetupForm] = useState({ initialBalance: "", initialDate: "", unitValue: "", initialFB: "" });
   const [showMovModal, setShowMovModal] = useState(false);
   const [movForm, setMovForm] = useState({ type: "deposit", amount: "", date: today(), note: "" });
@@ -2270,9 +2271,14 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
           <div style={{ background: T.card, borderRadius: 12, padding: "14px", border: `1px solid ${T.border}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <div style={{ fontSize: 12, color: T.text2, textTransform: "uppercase", letterSpacing: 1 }}>Bankroll</div>
-              <button onClick={openBkSetup} style={{ background: T.card2, border: "none", borderRadius: 8, padding: "4px 12px", color: T.accent, fontSize: 12, cursor: "pointer" }}>
-                {globalBk.initialBalance ? "Edit" : "Setup"}
-              </button>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={openBkSetup} style={{ background: T.card2, border: "none", borderRadius: 8, padding: "4px 12px", color: T.accent, fontSize: 12, cursor: "pointer" }}>
+                  {globalBk.initialBalance ? "Edit" : "Setup"}
+                </button>
+                <button onClick={() => setShowFullReset(true)} style={{ background: "#ef444415", border: "1px solid #ef444440", borderRadius: 8, padding: "4px 10px", color: T.lose, fontSize: 11, cursor: "pointer", fontWeight: 700 }}>
+                  🗑 Reset
+                </button>
+              </div>
             </div>
 
             {globalBk.initialBalance ? (
@@ -2426,6 +2432,48 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
               <div style={{ color: T.text3, textAlign: "center", padding: 20 }}>Aucun pari saisi pour l'instant</div>
             )}
           </div>
+
+          {/* FULL RESET MODAL */}
+          {showFullReset && (
+            <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}>
+              <div style={{ background: T.card2, borderRadius: 16, padding: 24, width: "100%", maxWidth: 340, border: `1px solid #ef444466` }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: T.lose, marginBottom: 8 }}>⚠️ Full Reset</div>
+                <div style={{ fontSize: 13, color: T.text2, marginBottom: 20, lineHeight: 1.5 }}>
+                  Ceci va supprimer <b style={{ color: T.text }}>absolument tout</b> : tous tes bets, ta bankroll, tes soldes par book, tes dépôts/retraits, tes freebets. Cette action est <b style={{ color: T.lose }}>irréversible</b>.
+                </div>
+                <div style={{ fontSize: 12, color: T.text3, marginBottom: 16 }}>Tape <b style={{ color: T.text }}>RESET</b> pour confirmer :</div>
+                <input
+                  id="reset-confirm-input"
+                  placeholder="RESET"
+                  style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", color: T.text, fontSize: 14, outline: "none", boxSizing: "border-box", marginBottom: 16, textAlign: "center", letterSpacing: 2, fontWeight: 700 }}
+                />
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={() => { setShowFullReset(false); document.getElementById("reset-confirm-input").value = ""; }}
+                    style={{ flex: 1, background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px", color: T.text2, fontSize: 13, cursor: "pointer" }}>
+                    Annuler
+                  </button>
+                  <button onClick={async () => {
+                    const val = document.getElementById("reset-confirm-input").value.trim().toUpperCase();
+                    if (val !== "RESET") { alert("Tape exactement RESET pour confirmer"); return; }
+                    // Delete all bets
+                    await supabase.from("bets").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+                    // Reset bankroll and bookConfig
+                    const emptyBankroll = { global: null, movements: [], fbMovements: [] };
+                    await supabase.from("settings").upsert({ key: "bankroll", value: JSON.stringify(emptyBankroll) }, { onConflict: "key" });
+                    await supabase.from("settings").upsert({ key: "bookConfig", value: JSON.stringify({}) }, { onConflict: "key" });
+                    // Reset local state
+                    updateBankroll(emptyBankroll);
+                    updateBookConfig({});
+                    setBets([]);
+                    setShowFullReset(false);
+                  }}
+                    style={{ flex: 2, background: T.lose, border: "none", borderRadius: 8, padding: "10px", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+                    Tout supprimer
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* SETUP MODAL */}
           {showBkSetup && (
