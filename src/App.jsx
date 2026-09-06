@@ -75,6 +75,7 @@ const SPORTS_CONFIG = {
 
 const SPORTS = Object.keys(SPORTS_CONFIG);
 const BOOKS = ["PS3838", "Betclic", "Unibet", "Winamax", "PMU", "PokerStars", "Bet365", "Yonibet", "Autre"];
+const TIPSTERS = ["Myself", "LanimNFL", "Cody Brown", "DRX", "DavidKsh", "Ju2Crane", "Janusport", "Autres"];
 
 // Brand colors extracted from each bookmaker's logo/identity
 const BOOK_COLORS = {
@@ -556,6 +557,7 @@ export default function App() {
         alreadyAccounted: b.already_accounted ?? false,
         system23Legs: b.system23_legs ? (typeof b.system23_legs === "string" ? JSON.parse(b.system23_legs) : b.system23_legs) : null,
         cashoutAmount: b.cashout_amount ?? "",
+        tipster: b.tipster ?? "Myself",
         comboBooster: Number(b.combo_booster ?? 0),
         book: b.book ?? "",
       })));
@@ -601,7 +603,7 @@ export default function App() {
         const anyWin = pairs.some(([i,j]) => legs[i].result === "Win" && legs[j].result === "Win");
         return anyWin ? "Win" : "Lose";
       })() : (f.result || "Pending");
-      const entry = { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: isSystem ? 0 : Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: sysResult, note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), book: f.book ?? "", already_accounted: f.alreadyAccounted ?? false, system23_legs: isSystem ? JSON.stringify(legs) : null, cashout_amount: f.result === "Cashout" ? Number(f.cashoutAmount ?? 0) : null };
+      const entry = { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: isSystem ? 0 : Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: sysResult, note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), book: f.book ?? "", already_accounted: f.alreadyAccounted ?? false, system23_legs: isSystem ? JSON.stringify(legs) : null, cashout_amount: f.result === "Cashout" ? Number(f.cashoutAmount ?? 0) : null, tipster: f.tipster ?? "Myself" };
       const { error } = await supabase.from("bets").update(entry).eq("id", editId);
       if (!error) setBets(bets.map((b) => (b.id === editId ? { ...entry, id: editId } : b)));
       else alert("Error saving: " + error.message);
@@ -612,7 +614,7 @@ export default function App() {
         return { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), already_accounted: f.alreadyAccounted ?? false, book: f.book ?? "" };
       });
       const { data, error } = await supabase.from("bets").insert(newEntries).select();
-      if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0), isFreebet: b.is_freebet ?? false, alreadyAccounted: b.already_accounted ?? false, book: b.book ?? "", system23Legs: b.system23_legs ? (typeof b.system23_legs === "string" ? JSON.parse(b.system23_legs) : b.system23_legs) : null, cashoutAmount: b.cashout_amount ?? "" })), ...bets]);
+      if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0), isFreebet: b.is_freebet ?? false, alreadyAccounted: b.already_accounted ?? false, book: b.book ?? "", system23Legs: b.system23_legs ? (typeof b.system23_legs === "string" ? JSON.parse(b.system23_legs) : b.system23_legs) : null, cashoutAmount: b.cashout_amount ?? "", tipster: b.tipster ?? "Myself" })), ...bets]);
       else alert("Error saving: " + error.message);
     }
     setBatchForms([emptyBetForm({}, unitValue)]);
@@ -646,6 +648,7 @@ export default function App() {
       book: bet.book ?? "",
       system23Legs: bet.system23Legs ?? (bet.system23_legs ? (typeof bet.system23_legs === "string" ? JSON.parse(bet.system23_legs) : bet.system23_legs) : [emptyLeg(), emptyLeg(), emptyLeg()]),
       cashoutAmount: bet.cashoutAmount ?? bet.cashout_amount ?? "",
+      tipster: bet.tipster ?? "Myself",
     }]);
     setEditId(bet.id);
     setTab("add");
@@ -673,6 +676,7 @@ export default function App() {
       if (key === "league") k = b.league || b.sport || "–";
       else if (key === "subCat") k = b.subCat || b.subcat || "–";
       else if (key === "book") k = b.book || "Unknown";
+      else if (key === "tipster") k = b.tipster || "Myself";
       else k = b[key] || "–";
       if (!map[k]) map[k] = { bets: [], wins: 0, profitE: 0, profitU: 0, totalInvE: 0, totalInvU: 0, oddsSum: 0, oddsCount: 0 };
       const s = map[k];
@@ -699,6 +703,8 @@ export default function App() {
     delete map["–"];
     return map;
   }, [filtered]);
+
+  const byTipster = useMemo(() => groupStats(filtered, "tipster"), [filtered]);
 
   const byBook = useMemo(() => {
     const map = groupStats(filtered, "book");
@@ -819,6 +825,7 @@ export default function App() {
         already_accounted: rest.alreadyAccounted ?? false,
         book: rest.book ?? "",
         cashout_amount: rest.cashoutAmount ?? null,
+        tipster: rest.tipster ?? "Myself",
         combo_booster: Number(rest.comboBooster ?? rest.combo_booster ?? 0),
       }));
       const { data, error } = await supabase.from("bets").insert(toInsert).select();
@@ -928,7 +935,7 @@ export default function App() {
             {tab !== "add" && (
               <div>
                 {tab === "list" && <ListTab bets={filtered} onEdit={startEdit} onDelete={setDeleteConfirm} onUpdateResult={handleUpdateResult} onExport={() => exportXLSX(bets)} onImport={handleCSVImport} filterMonth={filterMonth} scrollToDate={scrollToDate} onScrollDone={() => setScrollToDate(null)} onDeleteAll={() => { if (filterMonth === "all") { supabase.from("bets").delete().neq("id","00000000-0000-0000-0000-000000000000").then(() => setBets([])); } else { const ids = bets.filter(b => monthKey(b.date) === filterMonth).map(b => b.id); supabase.from("bets").delete().in("id", ids).then(() => setBets(bets.filter(b => monthKey(b.date) !== filterMonth))); }}} />}
-                {tab === "stats" && <StatsTab total={total} bySport={bySport} byLeague={byLeague} maxProfitAbs={maxProfitAbs} bkChartData={bkChartData} bankroll={bankroll} updateBankroll={updateBankroll} allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab} bets={bets} setBets={setBets} dailyChartData={dailyChartData} oddsRanges={oddsRanges} filterMonth={filterMonth} bySubCat={bySubCat} byBook={byBook} bookConfig={bookConfig} updateBookConfig={updateBookConfig} />}
+                {tab === "stats" && <StatsTab total={total} bySport={bySport} byLeague={byLeague} maxProfitAbs={maxProfitAbs} bkChartData={bkChartData} bankroll={bankroll} updateBankroll={updateBankroll} allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab} bets={bets} setBets={setBets} dailyChartData={dailyChartData} oddsRanges={oddsRanges} filterMonth={filterMonth} bySubCat={bySubCat} byBook={byBook} byTipster={byTipster} bookConfig={bookConfig} updateBookConfig={updateBookConfig} />}
               </div>
             )}
             {tab === "add" && <div style={{ color: T.text3, textAlign: "center", padding: 40 }}>Filling form on the left →</div>}
@@ -965,7 +972,7 @@ export default function App() {
               bankroll={bankroll} updateBankroll={updateBankroll}
               allMonths={allMonths} statsTab={statsTab} setStatsTab={setStatsTab}
               bets={bets} dailyChartData={dailyChartData} oddsRanges={oddsRanges}
-              filterMonth={filterMonth} bySubCat={bySubCat} byBook={byBook} bookConfig={bookConfig} updateBookConfig={updateBookConfig} />
+              filterMonth={filterMonth} bySubCat={bySubCat} byBook={byBook} byTipster={byTipster} bookConfig={bookConfig} updateBookConfig={updateBookConfig} />
           )}
         </div>
       )}
@@ -1021,6 +1028,7 @@ const emptyBetForm = (base = {}, uv = null) => ({
   alreadyAccounted: false,
   comboBooster: "",
   book: base.book ?? "PS3838",
+  tipster: base.tipster ?? "Myself",
   system23Legs: [emptyLeg(), emptyLeg(), emptyLeg()],
   cashoutAmount: "",
 });
@@ -1118,6 +1126,14 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
         <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Book <span style={{ color: T.lose, fontSize: 8 }}>*</span></div>
         <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
           {BOOKS.map((b) => <Chip key={b} label={b} active={form.book === b} onClick={() => set("book", b)} />)}
+        </div>
+      </div>
+
+      {/* Tipster */}
+      <div>
+        <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Tipster</div>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+          {TIPSTERS.map((t) => <Chip key={t} label={t} active={form.tipster === t} onClick={() => set("tipster", t)} color={t === "Myself" ? T.accent : "#a855f7"} />)}
         </div>
       </div>
 
@@ -1323,7 +1339,7 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
 function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, setTab, emptyForm, unitValue, isDesktop, saving }) {
   const addForm = () => {
     const last = batchForms[batchForms.length - 1];
-    setBatchForms([...batchForms, emptyBetForm({ date: last.date, sport: last.sport, league: last.league, subCat: last.subCat, stakeE: last.stakeE, stakeU: last.stakeU }, unitValue)]);
+    setBatchForms([...batchForms, emptyBetForm({ date: last.date, sport: last.sport, league: last.league, subCat: last.subCat, stakeE: last.stakeE, stakeU: last.stakeU, tipster: last.tipster }, unitValue)]);
   };
   const updateForm = (i, val) => setBatchForms(batchForms.map((f, idx) => idx === i ? val : f));
   const removeForm = (i) => setBatchForms(batchForms.filter((_, idx) => idx !== i));
@@ -1693,6 +1709,7 @@ function BetCard({ bet, onEdit, onDelete, onUpdateResult }) {
             {(bet.subCat || bet.subcat) && <Tag>{bet.subCat || bet.subcat}</Tag>}
             <Tag color={RESULT_COLORS[bet.result]}>{bet.result}</Tag>
             {bet.book && <Tag color={T.text3}>{bet.book}</Tag>}
+            {bet.tipster && bet.tipster !== "Myself" && <Tag color="#a855f755">{bet.tipster}</Tag>}
             {(bet.isFreebet || bet.is_freebet) && <Tag color="#7c3aed">FB</Tag>}
             {(bet.alreadyAccounted || bet.already_accounted) && <Tag color="#f0a500">◈ Accounted</Tag>}
           </div>
@@ -2016,7 +2033,7 @@ function FBWalletCard({ currentFBWallet, globalBk, bets, fbAdditions, addFBMovem
 // ════════════════════════════════════════════════════════════════════════════════
 // STATS TAB
 // ════════════════════════════════════════════════════════════════════════════════
-function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bkChartData, bankroll, updateBankroll, allMonths, statsTab, setStatsTab, bets, setBets, dailyChartData, oddsRanges, filterMonth, bookConfig, updateBookConfig }) {
+function StatsTab({ total, bySport, byLeague, bySubCat, byBook, byTipster, maxProfitAbs, bkChartData, bankroll, updateBankroll, allMonths, statsTab, setStatsTab, bets, setBets, dailyChartData, oddsRanges, filterMonth, bookConfig, updateBookConfig }) {
   const [showShare, setShowShare] = useState(false);
 
   // ── NEW BANKROLL MODEL ────────────────────────────────────────────────────────
@@ -2196,7 +2213,7 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
 
       {/* SUB-TABS */}
       <div style={{ display: "flex", gap: 8, borderBottom: `1px solid ${T.border}`, paddingBottom: 12, overflowX: "auto" }}>
-        {[["bk", "Bankroll"], ["sport", "By Sport"], ["league", "By League"], ["subcat", "By Type"], ["book", "By Book"]].map(([k, l]) => (
+        {[["bk", "Bankroll"], ["sport", "By Sport"], ["league", "By League"], ["subcat", "By Type"], ["tipster", "By Tipster"], ["book", "By Book"]].map(([k, l]) => (
           <button key={k} onClick={() => setStatsTab(k)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, color: statsTab === k ? T.accent : T.text3, borderBottom: statsTab === k ? `2px solid ${T.accent}` : "2px solid transparent", paddingBottom: 4, whiteSpace: "nowrap" }}>{l}</button>
         ))}
       </div>
@@ -2243,6 +2260,40 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, maxProfitAbs, bk
             ? renderGroup(bySubCat, Math.max(...Object.values(bySubCat).map((s) => Math.abs(s.profitE)), 1))
             : <div style={{ color: T.text3, textAlign: "center", padding: 20 }}>No data</div>
           }
+        </div>
+      )}
+
+      {statsTab === "tipster" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {TIPSTERS.filter(t => byTipster[t]).map(t => {
+            const s = byTipster[t] ?? { bets: [], wins: 0, profitE: 0, profitU: 0, totalInvE: 0 };
+            const winRate = s.bets > 0 ? (s.wins / s.bets * 100).toFixed(1) : "0.0";
+            const roi = s.totalInvE > 0 ? (s.profitE / s.totalInvE * 100).toFixed(2) : "0.00";
+            return (
+              <div key={t} style={{ background: T.card, borderRadius: 10, border: `1px solid ${T.border}`, borderLeft: `3px solid ${t === "Myself" ? T.accent : "#a855f7"}`, overflow: "hidden" }}>
+                <div style={{ padding: "9px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: t === "Myself" ? T.accent : "#a855f7" }}>{t}</div>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: s.profitE >= 0 ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>{fmt(s.profitE)}€</span>
+                </div>
+                <div style={{ padding: "0 12px 10px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, fontSize: 10 }}>
+                  <div style={{ color: T.text3 }}>Bets<br /><b style={{ color: T.text, fontSize: 12 }}>{s.bets}</b></div>
+                  <div style={{ color: T.text3 }}>Win %<br /><b style={{ color: T.text, fontSize: 12 }}>{winRate}%</b></div>
+                  <div style={{ color: T.text3 }}>ROI<br /><b style={{ color: Number(roi) >= 0 ? T.win : T.lose, fontSize: 12 }}>{roi >= 0 ? "+" : ""}{roi}%</b></div>
+                  <div style={{ color: T.text3 }}>Profit u<br /><b style={{ color: s.profitU >= 0 ? T.win : T.lose, fontSize: 12 }}>{s.profitU >= 0 ? "+" : ""}{s.profitU.toFixed(3)}u</b></div>
+                </div>
+              </div>
+            );
+          })}
+          {/* Unknown tipsters (not in list) */}
+          {Object.entries(byTipster).filter(([t]) => !TIPSTERS.includes(t)).map(([t, s]) => (
+            <div key={t} style={{ background: T.card, borderRadius: 10, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.text3}`, overflow: "hidden" }}>
+              <div style={{ padding: "9px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontWeight: 800, fontSize: 13, color: T.text2 }}>{t}</div>
+                <span style={{ fontSize: 13, fontWeight: 800, color: s.profitE >= 0 ? T.win : T.lose }}>{fmt(s.profitE)}€</span>
+              </div>
+            </div>
+          ))}
+          {Object.keys(byTipster).length === 0 && <div style={{ color: T.text3, textAlign: "center", padding: 20 }}>Aucun bet avec tipster</div>}
         </div>
       )}
 
