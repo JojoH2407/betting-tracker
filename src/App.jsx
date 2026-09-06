@@ -1352,8 +1352,11 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
         </div>
       )}
 
-      {/* Note */}
-      <Input label="Note (optional)" placeholder="Analysis, context..." value={form.note} onChange={(e) => set("note", e.target.value)} />
+        {/* Note */}
+        <Input label="Note (optional)" placeholder="Analysis, context..." value={form.note} onChange={(e) => set("note", e.target.value)} />
+      </>}
+
+      </div>
     </div>
   );
 }
