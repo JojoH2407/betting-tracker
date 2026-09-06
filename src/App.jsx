@@ -611,7 +611,14 @@ export default function App() {
     } else {
       const newEntries = valid.map((f, i) => {
         const stakeU = unitValue ? (Number(f.stakeE ?? f.stakee) / unitValue).toFixed(3) : (f.stakeU ?? f.stakeu ?? 1);
-        return { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: f.bet, odd: Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: f.result || "Pending", note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), already_accounted: f.alreadyAccounted ?? false, book: f.book ?? "" };
+        const isSystem = (f.subCat ?? f.subcat) === "System 2/3";
+        const legs = f.system23Legs ?? [];
+        const sysResult = isSystem ? (() => {
+          const pairs = [[0,1],[0,2],[1,2]];
+          if (legs.some(l => !l.result || l.result === "Pending")) return "Pending";
+          return pairs.some(([i,j]) => legs[i].result === "Win" && legs[j].result === "Win") ? "Win" : "Lose";
+        })() : (f.result || "Pending");
+        return { date: f.date, sport: f.sport, league: f.league ?? "", subcat: f.subCat ?? f.subcat ?? "", bet: isSystem ? f.bet : f.bet, odd: isSystem ? 0 : Number(f.odd), stakee: Number(f.stakeE ?? f.stakee ?? 0), stakeu: Number(stakeU), result: sysResult, note: f.note ?? "", is_freebet: f.isFreebet ?? false, combo_booster: Number(f.comboBooster ?? 0), already_accounted: f.alreadyAccounted ?? false, book: f.book ?? "", system23_legs: isSystem ? JSON.stringify(legs) : null, cashout_amount: f.result === "Cashout" ? Number(f.cashoutAmount ?? 0) : null, tipster: f.tipster ?? "Myself" };
       });
       const { data, error } = await supabase.from("bets").insert(newEntries).select();
       if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0), isFreebet: b.is_freebet ?? false, alreadyAccounted: b.already_accounted ?? false, book: b.book ?? "", system23Legs: b.system23_legs ? (typeof b.system23_legs === "string" ? JSON.parse(b.system23_legs) : b.system23_legs) : null, cashoutAmount: b.cashout_amount ?? "", tipster: b.tipster ?? "Myself" })), ...bets]);
@@ -1062,7 +1069,18 @@ const calcSystem23Profit = (legs, totalStakeE) => {
   return totalReturn - totalStakeE;
 };
 
+const DropSelect = ({ label, value, options, onChange, color }) => (
+  <div style={{ flex: 1 }}>
+    <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 5, fontWeight: 600 }}>{label}</div>
+    <select value={value} onChange={e => onChange(e.target.value)}
+      style={{ width: "100%", background: T.card2, border: `1px solid ${color ?? T.border}`, borderRadius: 8, padding: "9px 10px", color: color ?? T.text, fontSize: 12, fontWeight: 600, outline: "none", appearance: "none", WebkitAppearance: "none", cursor: "pointer" }}>
+      {options.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  </div>
+);
+
 function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
+  const [step, setStep] = useState(0); // 0=context, 1=bet, 2=result
   const cfg = SPORTS_CONFIG[form.sport] ?? { leagues: [], subCats: [] };
   const hasLeague = cfg.leagues.length > 0;
   const hasSubCat = cfg.subCats.length > 0;
@@ -1080,62 +1098,58 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
     onChange(next);
   };
 
+  const steps = ["Context", "Bet", "Result"];
+  const stepColor = ["#38bdf8", "#a855f7", "#22c55e"];
+
   return (
-    <div style={{ background: T.card, borderRadius: 10, padding: "12px", border: `1px solid ${T.border}`, display: "flex", flexDirection: "column", gap: 10 }}>
-      {/* header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: 1.5 }}>Bet {index + 1}</div>
+    <div style={{ background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, overflow: "hidden" }}>
+      {/* Step indicator */}
+      <div style={{ display: "flex", borderBottom: `1px solid ${T.border}` }}>
+        {steps.map((s, i) => (
+          <button key={i} onClick={() => setStep(i)}
+            style={{ flex: 1, background: step === i ? stepColor[i] + "18" : "transparent", border: "none", borderBottom: `2px solid ${step === i ? stepColor[i] : "transparent"}`, padding: "10px 6px", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+            <span style={{ fontSize: 9, fontWeight: 800, color: step === i ? stepColor[i] : T.text3, letterSpacing: 1, textTransform: "uppercase" }}>{s}</span>
+          </button>
+        ))}
         {canRemove && (
-          <button onClick={onRemove} style={{ background: "none", border: "none", color: T.lose, cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "2px 6px" }}>×</button>
+          <button onClick={onRemove} style={{ background: "none", border: "none", color: T.lose, cursor: "pointer", fontSize: 16, padding: "0 12px" }}>×</button>
         )}
       </div>
 
-      {/* Date */}
-      <Input label="Date" type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
+      <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: 10 }}>
 
-      {/* Sport */}
-      <div>
-        <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Sport</div>
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-          {Object.keys(SPORTS_CONFIG).map((s) => <Chip key={s} label={s} active={form.sport === s} onClick={() => set("sport", s)} />)}
-        </div>
-      </div>
+      {/* STEP 0: Context */}
+      {step === 0 && <>
+        <Input label="Date" type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
 
-      {/* League */}
-      {hasLeague && (
+        {/* Sport chips */}
         <div>
-          <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>League</div>
+          <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Sport</div>
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-            {cfg.leagues.map((l) => <Chip key={l} label={l} active={form.league === l} onClick={() => set("league", l)} />)}
+            {Object.keys(SPORTS_CONFIG).map((s) => <Chip key={s} label={s} active={form.sport === s} onClick={() => set("sport", s)} />)}
           </div>
         </div>
-      )}
 
-      {/* SubCat */}
-      {hasSubCat && (
-        <div>
-          <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Type</div>
-          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-            {cfg.subCats.map((s) => <Chip key={s} label={s} active={form.subCat === s} onClick={() => set("subCat", s)} />)}
-          </div>
+        {/* League + SubCat as dropdowns */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          {hasLeague && <DropSelect label="League" value={form.league} options={cfg.leagues} onChange={v => set("league", v)} />}
+          {hasSubCat && <DropSelect label="Type" value={form.subCat} options={cfg.subCats} onChange={v => set("subCat", v)} />}
         </div>
-      )}
 
-      {/* Book */}
-      <div>
-        <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Book <span style={{ color: T.lose, fontSize: 8 }}>*</span></div>
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-          {BOOKS.map((b) => <Chip key={b} label={b} active={form.book === b} onClick={() => set("book", b)} />)}
+        {/* Book + Tipster as dropdowns */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <DropSelect label="Book *" value={form.book} options={BOOKS} onChange={v => set("book", v)} />
+          <DropSelect label="Tipster" value={form.tipster ?? "Myself"} options={TIPSTERS} onChange={v => set("tipster", v)} color={form.tipster === "Myself" ? T.accent : "#a855f7"} />
         </div>
-      </div>
 
-      {/* Tipster */}
-      <div>
-        <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Tipster</div>
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-          {TIPSTERS.map((t) => <Chip key={t} label={t} active={form.tipster === t} onClick={() => set("tipster", t)} color={t === "Myself" ? T.accent : "#a855f7"} />)}
-        </div>
-      </div>
+        <button onClick={() => setStep(1)}
+          style={{ background: stepColor[0] + "22", border: `1px solid ${stepColor[0]}44`, borderRadius: 8, padding: "9px", color: stepColor[0], fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+          Next → Bet details
+        </button>
+      </>}
+
+      {/* STEP 1: Bet */}
+      {step === 1 && <>
 
       {/* System 2/3 legs */}
       {form.subCat === "System 2/3" ? (
@@ -1192,8 +1206,8 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
         </>
       )}
 
-      {/* Odd + Stakes */}
-      <div style={{ display: "grid", gridTemplateColumns: form.subCat === "System 2/3" ? "1fr 1fr" : "1fr 1fr 1fr", gap: 8 }}>
+        {/* Odd + Stakes */}
+        <div style={{ display: "grid", gridTemplateColumns: form.subCat === "System 2/3" ? "1fr 1fr" : "1fr 1fr 1fr", gap: 8 }}>
         {form.subCat !== "System 2/3" && <Input label="Odd" type="number" step="0.001" placeholder="2.100" value={form.odd} onChange={(e) => set("odd", e.target.value)} />}
         <Input label="Stake € (total)" type="number" value={form.stakeE} onChange={(e) => set("stakeE", e.target.value)} />
         <div>
@@ -1227,6 +1241,14 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
         </div>
       )}
 
+        <button onClick={() => setStep(2)}
+          style={{ background: "#a855f722", border: "1px solid #a855f744", borderRadius: 8, padding: "9px", color: "#a855f7", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+          Next → Result
+        </button>
+      </>}
+
+      {/* STEP 2: Result */}
+      {step === 2 && <>
       {/* Freebet toggle */}
       <button
         onClick={() => set("isFreebet", !form.isFreebet)}
@@ -1474,6 +1496,7 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
   const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [sportFilter, setSportFilter] = useState("All");
   const [bookFilter, setBookFilter] = useState("All");
+  const [tipsterFilter, setTipsterFilter] = useState("All");
   const [showFilters, setShowFilters] = useState(false);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("date");
@@ -1494,34 +1517,27 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
   const filtered = bets
     .filter(b => sportFilter === "All" || b.sport === sportFilter)
     .filter(b => bookFilter === "All" || (b.book || "Unknown") === bookFilter)
+    .filter(b => tipsterFilter === "All" || (b.tipster ?? "Myself") === tipsterFilter)
     .filter(b => statusFilter === "All" || b.result === statusFilter)
     .filter(b => !search || b.bet?.toLowerCase().includes(search.toLowerCase()) || b.league?.toLowerCase().includes(search.toLowerCase()) || (b.subCat ?? b.subcat ?? '').toLowerCase().includes(search.toLowerCase()));
   
   const sorted = [...filtered].sort((a, b) => {
-    // 1. Date desc
-    const dateCmp = b.date.localeCompare(a.date);
-    if (dateCmp !== 0) return dateCmp;
-
-    // 2. Sort by sport if sortBy === "sport"
-    if (sortBy === "sport") {
-      return a.sport.localeCompare(b.sport);
-    }
-
-    // 3. Pending first, grouped by sport
+    // 1. Pending always first (across all dates)
     const aPending = a.result === "Pending";
     const bPending = b.result === "Pending";
     if (aPending !== bPending) return aPending ? -1 : 1;
 
-    // 4. Within Pending: sort by sport
-    if (aPending && bPending) {
-      const sportCmp = a.sport.localeCompare(b.sport);
-      if (sportCmp !== 0) return sportCmp;
-    }
+    // 2. Date desc
+    const dateCmp = b.date.localeCompare(a.date);
+    if (dateCmp !== 0) return dateCmp;
 
-    // 5. Within settled: newest first
+    // 3. Sort by sport if sortBy === "sport"
+    if (sortBy === "sport") return a.sport.localeCompare(b.sport);
+
+    // 4. Within same date: newest first by created_at
     const caA = a.created_at ?? "";
     const caB = b.created_at ?? "";
-    return caB.localeCompare(caA); // descending = newest first within the day
+    return caB.localeCompare(caA);
   });
 
   // Group by week then by day (default) OR by sport
@@ -1559,7 +1575,7 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
         </button>
         <button onClick={() => setShowFilters(f => !f)} style={{ background: showFilters ? T.accentDim : T.card, border: `1px solid ${showFilters ? T.accent : T.border}`, borderRadius: 8, padding: "9px 11px", color: showFilters ? T.accent : T.text2, fontSize: 13, cursor: "pointer", position: "relative" }}>
           ⚙︎
-          {(sportFilter !== "All" || statusFilter !== "All" || bookFilter !== "All") && (
+          {(sportFilter !== "All" || statusFilter !== "All" || bookFilter !== "All" || tipsterFilter !== "All") && (
             <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: T.accent, display: "block" }} />
           )}
         </button>
@@ -1601,6 +1617,12 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
             <div style={{ fontSize: 11, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Filter by book</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {["All", ...BOOKS].map(b => <Chip key={b} label={b} active={bookFilter === b} onClick={() => setBookFilter(b)} />)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Filter by tipster</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {["All", ...TIPSTERS].map(t => <Chip key={t} label={t} active={tipsterFilter === t} onClick={() => setTipsterFilter(t)} />)}
             </div>
           </div>
           <div>
@@ -2210,6 +2232,44 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, byTipster, maxPr
       <button onClick={() => setShowShare(true)} style={{ background: T.card2, border: `1px solid ${T.border2}`, borderRadius: 12, padding: "10px 14px", color: T.text2, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%" }}>
         📊 {filterMonth === "all" ? "Share All Time Stats" : "Share Monthly Summary"}
       </button>
+
+      {/* HERO KPIs */}
+      <div style={{ background: T.card, borderRadius: 12, padding: "16px", border: `1px solid ${T.border}` }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+          <div style={{ background: T.card2, borderRadius: 10, padding: "12px", textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Profit</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: total.profitE >= 0 ? T.win : T.lose, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+              {total.profitE >= 0 ? "+" : ""}{total.profitE.toFixed(2)}€
+            </div>
+            <div style={{ fontSize: 11, color: total.profitU >= 0 ? T.win + "88" : T.lose + "88", marginTop: 2 }}>
+              {total.profitU >= 0 ? "+" : ""}{total.profitU.toFixed(3)}u
+            </div>
+          </div>
+          <div style={{ background: T.card2, borderRadius: 10, padding: "12px", textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>ROI</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: (total.totalInvE > 0 ? total.profitE / total.totalInvE * 100 : 0) >= 0 ? T.win : T.lose, lineHeight: 1 }}>
+              {total.totalInvE > 0 ? ((total.profitE / total.totalInvE * 100) >= 0 ? "+" : "") + (total.profitE / total.totalInvE * 100).toFixed(2) : "0.00"}%
+            </div>
+            <div style={{ fontSize: 11, color: T.text3, marginTop: 2 }}>{total.totalInvE.toFixed(0)}€ investi</div>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+          <div style={{ background: T.card2, borderRadius: 8, padding: "10px", textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Bets</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{total.bets}</div>
+          </div>
+          <div style={{ background: T.card2, borderRadius: 8, padding: "10px", textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Win %</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>
+              {total.bets > 0 ? (total.wins / total.bets * 100).toFixed(1) : "0.0"}%
+            </div>
+          </div>
+          <div style={{ background: T.card2, borderRadius: 8, padding: "10px", textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Pending</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: total.pending > 0 ? "#f59e0b" : T.text3 }}>{total.pending ?? 0}</div>
+          </div>
+        </div>
+      </div>
 
       {/* SUB-TABS */}
       <div style={{ display: "flex", gap: 8, borderBottom: `1px solid ${T.border}`, paddingBottom: 12, overflowX: "auto" }}>
