@@ -1525,19 +1525,26 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
     .filter(b => !search || b.bet?.toLowerCase().includes(search.toLowerCase()) || b.league?.toLowerCase().includes(search.toLowerCase()) || (b.subCat ?? b.subcat ?? '').toLowerCase().includes(search.toLowerCase()));
   
   const sorted = [...filtered].sort((a, b) => {
-    // 1. Pending always first (across all dates)
+    // 1. Pending always first
     const aPending = a.result === "Pending";
     const bPending = b.result === "Pending";
     if (aPending !== bPending) return aPending ? -1 : 1;
 
-    // 2. Date desc
+    // 2. Pending: sort by sport then by bet name alphabetically
+    if (aPending && bPending) {
+      const sportCmp = (a.sport ?? "").localeCompare(b.sport ?? "");
+      if (sportCmp !== 0) return sportCmp;
+      return (a.bet ?? "").localeCompare(b.bet ?? "");
+    }
+
+    // 3. Settled: date desc
     const dateCmp = b.date.localeCompare(a.date);
     if (dateCmp !== 0) return dateCmp;
 
-    // 3. Sort by sport if sortBy === "sport"
+    // 4. Sort by sport if sortBy === "sport"
     if (sortBy === "sport") return a.sport.localeCompare(b.sport);
 
-    // 4. Within same date: newest first by created_at
+    // 5. Within same date: newest first by created_at
     const caA = a.created_at ?? "";
     const caB = b.created_at ?? "";
     return caB.localeCompare(caA);
@@ -2329,9 +2336,10 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, byTipster, maxPr
       {statsTab === "tipster" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {TIPSTERS.filter(t => byTipster[t]).map(t => {
-            const s = byTipster[t] ?? { bets: [], wins: 0, profitE: 0, profitU: 0, totalInvE: 0 };
+            const s = byTipster[t] ?? { bets: 0, wins: 0, profitE: 0, profitU: 0, totalInvE: 0 };
             const winRate = s.bets > 0 ? (s.wins / s.bets * 100).toFixed(1) : "0.0";
             const roi = s.totalInvE > 0 ? (s.profitE / s.totalInvE * 100).toFixed(2) : "0.00";
+            const profitU = Number(s.profitU ?? 0);
             return (
               <div key={t} style={{ background: T.card, borderRadius: 10, border: `1px solid ${T.border}`, borderLeft: `3px solid ${t === "Myself" ? T.accent : "#a855f7"}`, overflow: "hidden" }}>
                 <div style={{ padding: "9px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -2341,8 +2349,8 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, byTipster, maxPr
                 <div style={{ padding: "0 12px 10px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, fontSize: 10 }}>
                   <div style={{ color: T.text3 }}>Bets<br /><b style={{ color: T.text, fontSize: 12 }}>{s.bets}</b></div>
                   <div style={{ color: T.text3 }}>Win %<br /><b style={{ color: T.text, fontSize: 12 }}>{winRate}%</b></div>
-                  <div style={{ color: T.text3 }}>ROI<br /><b style={{ color: Number(roi) >= 0 ? T.win : T.lose, fontSize: 12 }}>{roi >= 0 ? "+" : ""}{roi}%</b></div>
-                  <div style={{ color: T.text3 }}>Profit u<br /><b style={{ color: s.profitU >= 0 ? T.win : T.lose, fontSize: 12 }}>{s.profitU >= 0 ? "+" : ""}{s.profitU.toFixed(3)}u</b></div>
+                  <div style={{ color: T.text3 }}>ROI<br /><b style={{ color: Number(roi) >= 0 ? T.win : T.lose, fontSize: 12 }}>{Number(roi) >= 0 ? "+" : ""}{roi}%</b></div>
+                  <div style={{ color: T.text3 }}>Profit u<br /><b style={{ color: profitU >= 0 ? T.win : T.lose, fontSize: 12 }}>{profitU >= 0 ? "+" : ""}{profitU.toFixed(3)}u</b></div>
                 </div>
               </div>
             );
@@ -2352,7 +2360,7 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, byTipster, maxPr
             <div key={t} style={{ background: T.card, borderRadius: 10, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.text3}`, overflow: "hidden" }}>
               <div style={{ padding: "9px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ fontWeight: 800, fontSize: 13, color: T.text2 }}>{t}</div>
-                <span style={{ fontSize: 13, fontWeight: 800, color: s.profitE >= 0 ? T.win : T.lose }}>{fmt(s.profitE)}€</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: (s.profitE ?? 0) >= 0 ? T.win : T.lose }}>{fmt(s.profitE ?? 0)}€</span>
               </div>
             </div>
           ))}
