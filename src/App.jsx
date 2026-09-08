@@ -2336,8 +2336,9 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, byTipster, maxPr
       {statsTab === "tipster" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {TIPSTERS.filter(t => byTipster[t]).map(t => {
-            const s = byTipster[t] ?? { bets: 0, wins: 0, profitE: 0, profitU: 0, totalInvE: 0 };
-            const winRate = s.bets > 0 ? (s.wins / s.bets * 100).toFixed(1) : "0.0";
+            const s = byTipster[t] ?? { bets: [], wins: 0, profitE: 0, profitU: 0, totalInvE: 0 };
+            const count = s.bets?.length ?? 0;
+            const winRate = count > 0 ? (s.wins / count * 100).toFixed(1) : "0.0";
             const roi = s.totalInvE > 0 ? (s.profitE / s.totalInvE * 100).toFixed(2) : "0.00";
             const profitU = Number(s.profitU ?? 0);
             return (
@@ -2347,7 +2348,7 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, byTipster, maxPr
                   <span style={{ fontSize: 13, fontWeight: 800, color: s.profitE >= 0 ? T.win : T.lose, fontVariantNumeric: "tabular-nums" }}>{fmt(s.profitE)}€</span>
                 </div>
                 <div style={{ padding: "0 12px 10px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, fontSize: 10 }}>
-                  <div style={{ color: T.text3 }}>Bets<br /><b style={{ color: T.text, fontSize: 12 }}>{s.bets}</b></div>
+                  <div style={{ color: T.text3 }}>Bets<br /><b style={{ color: T.text, fontSize: 12 }}>{count}</b></div>
                   <div style={{ color: T.text3 }}>Win %<br /><b style={{ color: T.text, fontSize: 12 }}>{winRate}%</b></div>
                   <div style={{ color: T.text3 }}>ROI<br /><b style={{ color: Number(roi) >= 0 ? T.win : T.lose, fontSize: 12 }}>{Number(roi) >= 0 ? "+" : ""}{roi}%</b></div>
                   <div style={{ color: T.text3 }}>Profit u<br /><b style={{ color: profitU >= 0 ? T.win : T.lose, fontSize: 12 }}>{profitU >= 0 ? "+" : ""}{profitU.toFixed(3)}u</b></div>
