@@ -75,7 +75,7 @@ const SPORTS_CONFIG = {
 
 const SPORTS = Object.keys(SPORTS_CONFIG);
 const BOOKS = ["PS3838", "Betclic", "Unibet", "Winamax", "PMU", "PokerStars", "Bet365", "Yonibet", "Autre"];
-const TIPSTERS = ["Myself", "LanimNFL", "Cody Brown", "DRX", "DavidKsh", "Ju2Crane", "Janusport", "Autres"];
+const TIPSTERS = ["Myself", "LanimNFL", "Cody Brown", "DRX", "DavidKsh", "Ju2Crane", "Janusport", "Gavin McHugh", "Autres"];
 
 // Brand colors extracted from each bookmaker's logo/identity
 const BOOK_COLORS = {
