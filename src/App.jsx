@@ -47,15 +47,15 @@ const SPORTS_CONFIG = {
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   Soccer: {
-    leagues: ["Ligue 1", "Ligue 2", "Ligue 3", "BPL", "Liga", "Liga 2", "Primeira Liga", "Serie A", "Bundesliga", "Bundesliga 2", "Saudi Pro League", "Champions League", "Europa League", "Conference League", "World Cup", "MLS", "National Cup", "Exhibition", "Exotique", "PreSeason"],
+    leagues: ["Ligue 1", "Ligue 2", "Ligue 3", "BPL", "Liga", "Liga 2", "Primeira Liga", "Serie A", "Bundesliga", "Bundesliga 2", "Saudi Pro League", "Champions League", "Europa League", "Conference League", "EFL Cup", "Coupe de la Ligue", "Coupe du Roi", "Ligue Des Nations", "World Cup", "MLS", "Exhibition", "Exotique", "PreSeason"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Parlay", "Outright", "System 2/3"],
   },
   "US Football": {
-    leagues: ["NFL", "PreSeason"],
+    leagues: ["NFL", "NCAA", "PreSeason"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Outright", "Parlay", "System 2/3"],
   },
   Basketball: {
-    leagues: ["NBA", "WNBA", "EuroLeague", "Autre", "PreSeason"],
+    leagues: ["NBA", "WNBA", "NCAA", "EuroLeague", "Autre", "PreSeason"],
     subCats: ["ML", "AH", "O/U", "Player Props", "Team Props", "Boost", "Outright", "Parlay", "System 2/3"],
   },
   Hockey: {
