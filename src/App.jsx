@@ -356,22 +356,38 @@ const downloadTemplate = () => {
       {
         Date: "2026-06-12", Sport: "Tennis", League: "ATP", "Sub-cat": "ML",
         Bet: "Djokovic vs Alcaraz ML", Odd: 2.10, "Stake (€)": 60, "Stake (u)": 1.00,
-        Result: "Win", Book: "PS3838", Freebet: "No", "Already Accounted": "No", Note: ""
+        Result: "Win", Book: "PS3838", Tipster: "Myself", Freebet: "No", "Already Accounted": "No", Note: ""
       },
       {
         Date: "2026-06-12", Sport: "Baseball", League: "MLB", "Sub-cat": "Player Props",
         Bet: "Yankees vs Red Sox - Judge HR", Odd: 4.50, "Stake (€)": 15, "Stake (u)": 0.25,
-        Result: "Lose", Book: "Betclic", Freebet: "No", "Already Accounted": "No", Note: "Example note"
+        Result: "Lose", Book: "Betclic", Tipster: "DRX", Freebet: "No", "Already Accounted": "No", Note: "Example note"
       },
       {
         Date: "2026-06-12", Sport: "Soccer", League: "BPL", "Sub-cat": "AH",
         Bet: "Arsenal vs Chelsea AH -0.5", Odd: 1.95, "Stake (€)": 60, "Stake (u)": 1.00,
-        Result: "Pending", Book: "Unibet", Freebet: "Yes", "Already Accounted": "Yes", Note: "Outright long terme"
+        Result: "Pending", Book: "Unibet", Tipster: "Myself", Freebet: "Yes", "Already Accounted": "Yes", Note: "Outright long terme"
       },
     ];
+    rows.forEach(r => { r["Cashout (€)"] = ""; r["Combo Booster %"] = ""; r["System legs"] = ""; });
+    rows.push({
+      Date: "2026-06-13", Sport: "Tennis", League: "ATP", "Sub-cat": "System 2/3",
+      Bet: "System Djoko/Alcaraz/Sinner", Odd: 0, "Stake (€)": 60, "Stake (u)": 1.00,
+      Result: "Win", Book: "PS3838", Tipster: "Myself", Freebet: "No", "Already Accounted": "No",
+      Note: "Format legs : sélection @cote [Résultat] séparées par ' | '",
+      "Cashout (€)": "", "Combo Booster %": "",
+      "System legs": "Djokovic ML @1.50 [Win] | Alcaraz ML @1.80 [Lose] | Sinner ML @1.60 [Win]",
+    });
+    rows.push({
+      Date: "2026-06-13", Sport: "Soccer", League: "Liga", "Sub-cat": "Parlay",
+      Bet: "Combiné exemple cashout", Odd: 3.2, "Stake (€)": 30, "Stake (u)": 0.5,
+      Result: "Cashout", Book: "Betclic", Tipster: "Myself", Freebet: "No", "Already Accounted": "No",
+      Note: "Cashout (€) = gain net (négatif si perte)",
+      "Cashout (€)": -12.5, "Combo Booster %": 5, "System legs": "",
+    });
     const ws = XLSX.utils.json_to_sheet(rows);
     // Set column widths
-    ws["!cols"] = [10,12,15,14,40,8,12,12,10,10,10,18,10].map(w => ({ wch: w }));
+    ws["!cols"] = [10,12,15,14,40,8,12,12,10,10,14,10,18,24,12,16,60].map(w => ({ wch: w }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Bets Template");
     XLSX.writeFile(wb, "bet-tracker-template.xlsx");
@@ -410,6 +426,24 @@ const parseDate = (raw) => {
   return today();
 };
 
+const normTipster = (raw) => {
+  const v = String(raw ?? "").trim();
+  if (!v) return "Myself";
+  return TIPSTERS.find(t => t.toLowerCase() === v.toLowerCase()) ?? "Autres";
+};
+
+// "Sél A @1.50 [Win] | Sél B @1.80 [Lose] | Sél C @1.60 [Pending]" → 3 legs
+const parseLegs = (raw) => {
+  if (!raw) return null;
+  const rm = { win: "Win", lose: "Lose", void: "Void", pending: "Pending" };
+  const legs = String(raw).split("|").map(p => {
+    const m = p.trim().match(/^(.*?)\s*@\s*([\d.,]+)\s*(?:\[\s*(\w+)\s*\])?$/);
+    if (!m) return null;
+    return { bet: m[1].trim(), odd: m[2].replace(",", "."), result: rm[(m[3] ?? "pending").toLowerCase()] ?? "Pending" };
+  });
+  return legs.length === 3 && legs.every(Boolean) ? legs : null;
+};
+
 const parseCSV = (text) => {
   const sep = detectSeparator(text);
   const allLines = text.trim().split(/\r?\n/);
@@ -421,7 +455,7 @@ const parseCSV = (text) => {
   const lines = headerIdx >= 0 ? allLines.slice(headerIdx) : allLines;
   const headers = parseCSVLine(lines[0], sep).map((h) => h.replace(/"/g, "").toLowerCase().trim());
 
-  const resultMap = { win: "Win", lose: "Lose", void: "Void", "": "", pending: "Pending" };
+  const resultMap = { win: "Win", lose: "Lose", void: "Void", cashout: "Cashout", "": "", pending: "Pending" };
   const sportMap = { tennis: "Tennis", baseball: "Baseball", mlb: "Baseball", football: "Soccer", soccer: "Soccer", mls: "Soccer", "us football": "US Football", nfl: "US Football", basketball: "Basketball", nba: "Basketball", wnba: "Basketball", esport: "eSport", "e-sport": "eSport", "mixed sports": "Mixed Sports", mixed: "Mixed Sports", f1: "F1", cycling: "Cycling", hockey: "Hockey", nhl: "Hockey", mma: "MMA", ufc: "MMA" };
 
   return lines.slice(1).map((line) => {
@@ -448,6 +482,8 @@ const parseCSV = (text) => {
       return "";
     };
 
+    const sysLegs = parseLegs(g("system legs", "systemlegs", "legs"));
+    const coRaw = g("cashout (€)", "cashout(€)", "cashout (e)", "cashout");
     return {
       id: Date.now() + Math.random(),
       date: parseDate(row.date ?? row.date),
@@ -455,7 +491,7 @@ const parseCSV = (text) => {
       league: g("league", "category") || "",
       subCat: g("sub-cat", "subcat", "subcategory", "type", "sub cat") || "",
       bet: g("bet") || "",
-      odd: parseNum(g("odd", "odds")) || 1,
+      odd: parseNum(g("odd", "odds")) || (sysLegs ? 0 : 1),
       stakeE: parseNum(g("stake (€)", "stake(€)", "stakee", "stake (e)", "stake(e)", "stake")) || 0,
       stakeU: parseNum(g("stake (u)", "stake(u)", "stakeu", "stake(u)")) || 0,
       result: result || "",
@@ -463,6 +499,10 @@ const parseCSV = (text) => {
       isFreebet: ["yes", "oui", "true", "1"].includes((g("freebet", "is_freebet", "freebets") || "").toLowerCase()),
       alreadyAccounted: ["yes", "oui", "true", "1"].includes((g("already accounted", "already_accounted", "alreadyaccounted", "accounted") || "").toLowerCase()),
       book: g("book", "bookmaker", "Book", "Bookmaker") || "",
+      tipster: normTipster(g("tipster", "tipsters")),
+      system23Legs: sysLegs,
+      cashoutAmount: coRaw !== "" ? parseNum(coRaw) : null,
+      comboBooster: parseNum(g("combo booster %", "combo booster", "booster", "combobooster")) || 0,
     };
   }).filter((b) => b && b.bet);
 };
@@ -478,8 +518,10 @@ const exportXLSX = (bets) => {
       const odd = pn(b.odd);
       const stakeE = pn(b.stakeE ?? b.stakee);
       const stakeU = pn(b.stakeU ?? b.stakeu);
-      const profitE = b.result === "Win" ? (odd - 1) * stakeE : b.result === "Lose" ? -stakeE : 0;
-      const profitU = b.result === "Win" ? (odd - 1) * stakeU : b.result === "Lose" ? -stakeU : 0;
+      const isSettled = b.result && b.result !== "Pending" && b.result !== "Void";
+      const profitE = isSettled ? calcProfit(b, "E") : 0;
+      const profitU = isSettled ? calcProfit(b, "U") : 0;
+      const legsTxt = (b.system23Legs ?? []).map(l => `${l.bet} @${l.odd} [${l.result}]`).join(" | ");
       return {
         Date: b.date,
         Sport: b.sport,
@@ -493,9 +535,13 @@ const exportXLSX = (bets) => {
         "Profit (€)": stakeE > 0 ? profitE : "",
         "Profit (u)": stakeU > 0 ? profitU : "",
         Book: b.book ?? "",
+        Tipster: b.tipster ?? "Myself",
         Freebet: (b.isFreebet || b.is_freebet) ? "Yes" : "No",
         "Already Accounted": (b.alreadyAccounted || b.already_accounted) ? "Yes" : "No",
         Note: b.note ?? "",
+        "Combo Booster %": Number(b.comboBooster ?? b.combo_booster ?? 0) || "",
+        "Cashout (€)": b.result === "Cashout" ? Number(b.cashoutAmount ?? b.cashout_amount ?? 0) : "",
+        "System legs": legsTxt,
       };
     });
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -624,7 +670,14 @@ export default function App() {
       if (data) setBets([...data.map(b => ({ ...b, subCat: b.subcat ?? "", stakeE: Number(b.stakee ?? 0), stakeU: Number(b.stakeu ?? 0), isFreebet: b.is_freebet ?? false, alreadyAccounted: b.already_accounted ?? false, book: b.book ?? "", system23Legs: b.system23_legs ? (typeof b.system23_legs === "string" ? JSON.parse(b.system23_legs) : b.system23_legs) : null, cashoutAmount: b.cashout_amount ?? "", tipster: b.tipster ?? "Myself" })), ...bets]);
       else alert("Error saving: " + error.message);
     }
-    setBatchForms([emptyBetForm({}, unitValue)]);
+    if (editId === null) {
+      const lastF = valid[valid.length - 1];
+      const persist = { sport: lastF.sport, league: lastF.league, subCat: lastF.subCat ?? lastF.subcat, book: lastF.book, tipster: lastF.tipster ?? "Myself" };
+      save("bet_last_ctx", persist);
+      setBatchForms([emptyBetForm({ ...persist, date: lastF.date }, unitValue)]);
+    } else {
+      setBatchForms([emptyBetForm({}, unitValue)]);
+    }
     const targetDate = valid[0]?.date ?? today();
     setScrollToDate(targetDate);
     setTab("list");
@@ -735,7 +788,7 @@ export default function App() {
       if (b.odd) { oddsSum += Number(b.odd); oddsCount++; }
     });
     return {
-      total: filtered.length, wins, settled,
+      total: filtered.length, wins, settled, pending: filtered.filter(b => b.result === "Pending").length,
       winRate: settled ? (wins / settled) * 100 : 0,
       profitE, profitU, totalInvE, totalInvU,
       roi: totalInvE ? (profitE / totalInvE) * 100 : 0,
@@ -831,7 +884,8 @@ export default function App() {
         is_freebet: rest.isFreebet ?? false,
         already_accounted: rest.alreadyAccounted ?? false,
         book: rest.book ?? "",
-        cashout_amount: rest.cashoutAmount ?? null,
+        cashout_amount: rest.result === "Cashout" ? (rest.cashoutAmount ?? 0) : null,
+        system23_legs: rest.system23Legs ? JSON.stringify(rest.system23Legs) : null,
         tipster: rest.tipster ?? "Myself",
         combo_booster: Number(rest.comboBooster ?? rest.combo_booster ?? 0),
       }));
@@ -846,6 +900,9 @@ export default function App() {
           alreadyAccounted: b.already_accounted ?? false,
           book: b.book ?? "",
           comboBooster: Number(b.combo_booster ?? 0),
+          tipster: b.tipster ?? "Myself",
+          cashoutAmount: b.cashout_amount ?? "",
+          system23Legs: b.system23_legs ? (typeof b.system23_legs === "string" ? JSON.parse(b.system23_legs) : b.system23_legs) : null,
         })), ...bets]);
         alert(`✅ ${data.length} bets imported!`);
       } else alert("Import error: " + error.message);
@@ -1020,7 +1077,9 @@ export default function App() {
 // ════════════════════════════════════════════════════════════════════════════════
 
 const emptyLeg = () => ({ bet: "", odd: "", result: "Pending" });
-const emptyBetForm = (base = {}, uv = null) => ({
+const emptyBetForm = (baseIn = {}, uv = null) => {
+  const base = { ...load("bet_last_ctx", {}), ...baseIn };
+  return ({
   date: base.date ?? today(),
   sport: base.sport ?? "Tennis",
   league: base.league ?? "ATP",
@@ -1038,7 +1097,8 @@ const emptyBetForm = (base = {}, uv = null) => ({
   tipster: base.tipster ?? "Myself",
   system23Legs: [emptyLeg(), emptyLeg(), emptyLeg()],
   cashoutAmount: "",
-});
+  });
+};
 
 // Calculate System 2/3 profit given 3 legs and total stake
 const calcSystem23Profit = (legs, totalStakeE) => {
@@ -1080,10 +1140,9 @@ const DropSelect = ({ label, value, options, onChange, color }) => (
 );
 
 function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
-  const [step, setStep] = useState(0); // 0=context, 1=bet, 2=result
+  const [showOpts, setShowOpts] = useState(!!(form.isFreebet || form.alreadyAccounted || form.comboBooster || form.note));
   const cfg = SPORTS_CONFIG[form.sport] ?? { leagues: [], subCats: [] };
-  const hasLeague = cfg.leagues.length > 0;
-  const hasSubCat = cfg.subCats.length > 0;
+  const isSystem = form.subCat === "System 2/3";
   const rawStakeE = Number(form.stakeE ?? form.stakee ?? 0);
   const rawU = unitValue && rawStakeE > 0 ? (rawStakeE / unitValue) : null;
   const computedU = rawU !== null && !isNaN(rawU) ? rawU.toFixed(3) : null;
@@ -1098,101 +1157,65 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
     onChange(next);
   };
 
-  const steps = ["Context", "Bet", "Result"];
-  const stepColor = ["#38bdf8", "#a855f7", "#22c55e"];
+  const legs = form.system23Legs ?? [emptyLeg(), emptyLeg(), emptyLeg()];
+  const setLeg = (i, patch) => {
+    const copy = [...legs];
+    copy[i] = { ...copy[i], ...patch };
+    set("system23Legs", copy);
+  };
+
+  const smallInput = { width: "100%", background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", color: T.text, fontSize: 14, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" };
+  const lbl = { fontSize: 9, color: T.text3, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4, fontWeight: 600 };
 
   return (
-    <div style={{ background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, overflow: "hidden" }}>
-      {/* Step indicator */}
-      <div style={{ display: "flex", borderBottom: `1px solid ${T.border}` }}>
-        {steps.map((s, i) => (
-          <button key={i} onClick={() => setStep(i)}
-            style={{ flex: 1, background: step === i ? stepColor[i] + "18" : "transparent", border: "none", borderBottom: `2px solid ${step === i ? stepColor[i] : "transparent"}`, padding: "10px 6px", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-            <span style={{ fontSize: 9, fontWeight: 800, color: step === i ? stepColor[i] : T.text3, letterSpacing: 1, textTransform: "uppercase" }}>{s}</span>
-          </button>
-        ))}
-        {canRemove && (
-          <button onClick={onRemove} style={{ background: "none", border: "none", color: T.lose, cursor: "pointer", fontSize: 16, padding: "0 12px" }}>×</button>
-        )}
+    <div style={{ background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, padding: 12, display: "flex", flexDirection: "column", gap: 9 }}>
+      {canRemove && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 10, color: T.text3, fontWeight: 700, letterSpacing: 1.5 }}>BET #{index + 1}</span>
+          <button onClick={onRemove} style={{ background: "none", border: "none", color: T.lose, cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
+        </div>
+      )}
+
+      {/* Context : 3 lignes de 2 dropdowns */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div>
+          <div style={lbl}>Date</div>
+          <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} style={{ ...smallInput, fontSize: 12, padding: "9px 8px" }} />
+        </div>
+        <DropSelect label="Sport" value={form.sport} options={SPORTS} onChange={v => set("sport", v)} />
+        {cfg.leagues.length > 0 && <DropSelect label="League" value={form.league} options={cfg.leagues} onChange={v => set("league", v)} />}
+        {cfg.subCats.length > 0 && <DropSelect label="Type" value={form.subCat} options={cfg.subCats} onChange={v => set("subCat", v)} />}
+        <DropSelect label="Book" value={form.book} options={BOOKS} onChange={v => set("book", v)} color={bookColor(form.book).accent} />
+        <DropSelect label="Tipster" value={form.tipster ?? "Myself"} options={TIPSTERS} onChange={v => set("tipster", v)} color={(form.tipster ?? "Myself") === "Myself" ? T.accent : "#a855f7"} />
       </div>
 
-      <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: 10 }}>
-
-      {/* STEP 0: Context */}
-      {step === 0 && <>
-        <Input label="Date" type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
-
-        {/* Sport chips */}
-        <div>
-          <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Sport</div>
-          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-            {Object.keys(SPORTS_CONFIG).map((s) => <Chip key={s} label={s} active={form.sport === s} onClick={() => set("sport", s)} />)}
-          </div>
-        </div>
-
-        {/* League + SubCat as dropdowns */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          {hasLeague && <DropSelect label="League" value={form.league} options={cfg.leagues} onChange={v => set("league", v)} />}
-          {hasSubCat && <DropSelect label="Type" value={form.subCat} options={cfg.subCats} onChange={v => set("subCat", v)} />}
-        </div>
-
-        {/* Book + Tipster as dropdowns */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <DropSelect label="Book *" value={form.book} options={BOOKS} onChange={v => set("book", v)} />
-          <DropSelect label="Tipster" value={form.tipster ?? "Myself"} options={TIPSTERS} onChange={v => set("tipster", v)} color={form.tipster === "Myself" ? T.accent : "#a855f7"} />
-        </div>
-
-        <button onClick={() => setStep(1)}
-          style={{ background: stepColor[0] + "22", border: `1px solid ${stepColor[0]}44`, borderRadius: 8, padding: "9px", color: stepColor[0], fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-          Next → Bet details
-        </button>
-      </>}
-
-      {/* STEP 1: Bet */}
-      {step === 1 && <>
-
-      {/* System 2/3 legs */}
-      {form.subCat === "System 2/3" ? (
+      {/* Bet */}
+      {isSystem ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {/* Global title */}
-          <Input placeholder="Titre du système (ex: System Djoko/Alcaraz/Sinner)" value={form.bet} onChange={(e) => set("bet", e.target.value)} />
-          <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1 }}>
-            3 Sélections <span style={{ color: T.text3, textTransform: "none", fontSize: 9 }}>(3 doublés × mise/3)</span>
-          </div>
-          {(form.system23Legs ?? [emptyLeg(),emptyLeg(),emptyLeg()]).map((leg, i) => (
-            <div key={i} style={{ background: T.card2, borderRadius: 8, padding: "10px 10px", border: `1px solid ${T.border}`, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ fontSize: 10, color: T.accent, fontWeight: 700, letterSpacing: 1 }}>Sél. {i + 1}</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 6 }}>
-                <input
-                  placeholder={`Sélection ${i+1}`}
-                  value={leg.bet}
-                  onChange={e => { const legs = [...(form.system23Legs ?? [emptyLeg(),emptyLeg(),emptyLeg()])]; legs[i] = {...legs[i], bet: e.target.value}; set("system23Legs", legs); }}
-                  style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px 10px", color: T.text, fontSize: 12, outline: "none", boxSizing: "border-box" }}
-                />
-                <input
-                  type="number" step="0.001" placeholder="Cote"
-                  value={leg.odd}
-                  onChange={e => { const legs = [...(form.system23Legs ?? [emptyLeg(),emptyLeg(),emptyLeg()])]; legs[i] = {...legs[i], odd: e.target.value}; set("system23Legs", legs); }}
-                  style={{ width: 70, background: T.card, border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px 8px", color: T.text, fontSize: 12, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" }}
-                />
+          <input placeholder="Titre du système (ex: System Djoko/Alcaraz/Sinner)" value={form.bet} onChange={(e) => set("bet", e.target.value)} style={smallInput} />
+          {legs.map((leg, i) => (
+            <div key={i} style={{ background: T.card2, borderRadius: 8, padding: 8, border: `1px solid ${T.border}`, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 72px", gap: 6 }}>
+                <input placeholder={`Sélection ${i + 1}`} value={leg.bet} onChange={e => setLeg(i, { bet: e.target.value })}
+                  style={{ ...smallInput, background: T.card, fontSize: 12, padding: "8px 10px" }} />
+                <input type="number" step="0.001" placeholder="Cote" value={leg.odd} onChange={e => setLeg(i, { odd: e.target.value })}
+                  style={{ ...smallInput, background: T.card, fontSize: 12, padding: "8px" }} />
               </div>
-              <div style={{ display: "flex", gap: 5 }}>
+              <div style={{ display: "flex", gap: 4 }}>
                 {RESULTS.map(r => (
-                  <button key={r} onClick={() => { const legs = [...(form.system23Legs ?? [emptyLeg(),emptyLeg(),emptyLeg()])]; legs[i] = {...legs[i], result: r}; set("system23Legs", legs); }}
-                    style={{ flex: 1, background: leg.result === r ? (RESULT_COLORS[r] + "33") : T.card, border: `1px solid ${leg.result === r ? RESULT_COLORS[r] : T.border}`, borderRadius: 6, padding: "5px 4px", color: leg.result === r ? RESULT_COLORS[r] : T.text3, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+                  <button key={r} onClick={() => setLeg(i, { result: r })}
+                    style={{ flex: 1, background: leg.result === r ? (RESULT_COLORS[r] + "33") : T.card, border: `1px solid ${leg.result === r ? RESULT_COLORS[r] : T.border}`, borderRadius: 6, padding: "4px 2px", color: leg.result === r ? RESULT_COLORS[r] : T.text3, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
                     {r}
                   </button>
                 ))}
               </div>
             </div>
           ))}
-          {/* System profit preview */}
           {(() => {
-            const legs = form.system23Legs ?? [];
             const p = calcSystem23Profit(legs, Number(form.stakeE ?? 0));
             if (p === null) return null;
             return (
-              <div style={{ background: p >= 0 ? T.win + "15" : T.lose + "15", border: `1px solid ${p >= 0 ? T.win : T.lose}44`, borderRadius: 8, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ background: p >= 0 ? T.win + "15" : T.lose + "15", border: `1px solid ${p >= 0 ? T.win : T.lose}44`, borderRadius: 8, padding: "6px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 11, color: T.text2 }}>Gain net estimé</span>
                 <span style={{ fontSize: 14, fontWeight: 800, color: p >= 0 ? T.win : T.lose }}>{p >= 0 ? "+" : ""}{p.toFixed(2)}€</span>
               </div>
@@ -1200,163 +1223,72 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
           })()}
         </div>
       ) : (
-        <>
-          {/* Bet description */}
-          <Input placeholder="e.g. Djokovic vs Alcaraz ML" value={form.bet} onChange={(e) => set("bet", e.target.value)} />
-        </>
+        <input placeholder="ex: Djokovic vs Alcaraz ML" value={form.bet} onChange={(e) => set("bet", e.target.value)} style={smallInput} />
       )}
 
-        {/* Odd + Stakes */}
-        <div style={{ display: "grid", gridTemplateColumns: form.subCat === "System 2/3" ? "1fr 1fr" : "1fr 1fr 1fr", gap: 8 }}>
-        {form.subCat !== "System 2/3" && <Input label="Odd" type="number" step="0.001" placeholder="2.100" value={form.odd} onChange={(e) => set("odd", e.target.value)} />}
-        <Input label="Stake € (total)" type="number" value={form.stakeE} onChange={(e) => set("stakeE", e.target.value)} />
+      {/* Odd + stakes */}
+      <div style={{ display: "grid", gridTemplateColumns: isSystem ? "1fr 1fr" : "1fr 1fr 1fr", gap: 8 }}>
+        {!isSystem && (
+          <div>
+            <div style={lbl}>Odd</div>
+            <input type="number" step="0.001" placeholder="2.100" value={form.odd} onChange={(e) => set("odd", e.target.value)} style={smallInput} />
+          </div>
+        )}
         <div>
-          <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Stake u</div>
+          <div style={lbl}>Stake €</div>
+          <input type="number" value={form.stakeE} onChange={(e) => set("stakeE", e.target.value)} style={smallInput} />
+        </div>
+        <div>
+          <div style={lbl}>Stake u</div>
           {computedU
-            ? <div style={{ background: T.card2, border: `1px solid ${T.accent}30`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: T.accent, fontWeight: 700 }}>{computedU}u</div>
-            : <input type="number" step="0.001" value={manualU} onChange={(e) => set("stakeU", e.target.value)}
-                style={{ width: "100%", background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" }} />
-          }
+            ? <div style={{ ...smallInput, border: `1px solid ${T.accent}30`, color: T.accent, fontWeight: 700, fontSize: 13 }}>{computedU}u</div>
+            : <input type="number" step="0.001" value={manualU} onChange={(e) => set("stakeU", e.target.value)} style={smallInput} />}
         </div>
       </div>
-
-      {/* Combo Booster - only for Parlay (not System 2/3) */}
-      {form.subCat === "Parlay" && form.subCat !== "System 2/3" && (
-        <div>
-          <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>
-            Combo Booster % <span style={{ color: T.text3, fontSize: 9, textTransform: "none" }}>(optionnel)</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input
-              type="number" step="0.1" min="0" max="100"
-              placeholder="0.5"
-              value={form.comboBooster}
-              onChange={(e) => set("comboBooster", e.target.value)}
-              style={{ flex: 1, background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box", WebkitAppearance: "none" }}
-            />
-            <div style={{ fontSize: 11, color: T.text3, whiteSpace: "nowrap" }}>
-              {form.comboBooster > 0 ? `+${((Number(form.odd) - 1) * Number(form.stakeE || 0) * Number(form.comboBooster) / 100).toFixed(2)}€ bonus` : "% bonus"}
-            </div>
-          </div>
-        </div>
-      )}
-
-        <button onClick={() => setStep(2)}
-          style={{ background: "#a855f722", border: "1px solid #a855f744", borderRadius: 8, padding: "9px", color: "#a855f7", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-          Next → Result
-        </button>
-      </>}
-
-      {/* STEP 2: Result */}
-      {step === 2 && <>
-      {/* Freebet toggle */}
-      <button
-        onClick={() => set("isFreebet", !form.isFreebet)}
-        style={{
-          display: "flex", alignItems: "center", gap: 10,
-          background: form.isFreebet ? "#7c3aed18" : T.card2,
-          border: `1px solid ${form.isFreebet ? "#7c3aed60" : T.border}`,
-          borderRadius: 8, padding: "8px 12px", cursor: "pointer", width: "100%",
-          transition: "all .2s",
-        }}
-      >
-        <div style={{
-          width: 32, height: 18, borderRadius: 9,
-          background: form.isFreebet ? "#7c3aed" : T.border2,
-          position: "relative", transition: "background .2s", flexShrink: 0,
-        }}>
-          <div style={{
-            width: 14, height: 14, borderRadius: "50%", background: "#fff",
-            position: "absolute", top: 2,
-            left: form.isFreebet ? 16 : 2,
-            transition: "left .2s",
-          }} />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: form.isFreebet ? "#7c3aed" : T.text2, letterSpacing: 0.3 }}>
-            {form.isFreebet ? "Freebet" : "Cash"}
-          </span>
-          {form.isFreebet && (
-            <span style={{ fontSize: 9, color: "#7c3aed88", letterSpacing: 0.2 }}>Win = (cote−1)×mise · Lose = 0</span>
-          )}
-        </div>
-        <div style={{ marginLeft: "auto", fontSize: 11, color: form.isFreebet ? "#7c3aed" : T.text3, fontWeight: 600 }}>
-          {form.isFreebet ? "FB" : "CASH"}
-        </div>
-      </button>
-
-      {/* Already Accounted toggle */}
-      <button
-        onClick={() => set("alreadyAccounted", !form.alreadyAccounted)}
-        style={{
-          display: "flex", alignItems: "center", gap: 10,
-          background: form.alreadyAccounted ? "#f0a50012" : T.card2,
-          border: `1px solid ${form.alreadyAccounted ? "#f0a50060" : T.border}`,
-          borderRadius: 8, padding: "8px 12px", cursor: "pointer", width: "100%",
-          transition: "all .2s",
-        }}
-      >
-        {/* Diamond checkbox */}
-        <div style={{
-          width: 18, height: 18, borderRadius: 4,
-          border: `2px solid ${form.alreadyAccounted ? "#f0a500" : T.border2}`,
-          background: form.alreadyAccounted ? "#f0a500" : "transparent",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0, transition: "all .2s",
-          transform: "rotate(45deg)",
-        }}>
-          {form.alreadyAccounted && (
-            <div style={{ width: 6, height: 6, background: T.bg, borderRadius: 1 }} />
-          )}
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: form.alreadyAccounted ? "#f0a500" : T.text2, letterSpacing: 0.3 }}>
-            Already accounted
-          </span>
-          {form.alreadyAccounted && (
-            <span style={{ fontSize: 9, color: "#f0a50088", letterSpacing: 0.2 }}>Lose = 0 impact · Win = gain normal</span>
-          )}
-        </div>
-        <div style={{ marginLeft: "auto", fontSize: 10, color: form.alreadyAccounted ? "#f0a500" : T.text3, fontWeight: 700, letterSpacing: 0.5 }}>
-          {form.alreadyAccounted ? "ON" : "OFF"}
-        </div>
-      </button>
 
       {/* Result */}
-      <div>
-        <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Result</div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {RESULTS.filter(r => !(r === "Cashout" && form.isFreebet)).map((r) => <Chip key={r} label={r} active={form.result === r} onClick={() => set("result", r)} color={RESULT_COLORS[r]} />)}
-        </div>
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+        {RESULTS.filter(r => !(r === "Cashout" && form.isFreebet)).map((r) => (
+          <Chip key={r} label={r} active={form.result === r} onClick={() => set("result", r)} color={RESULT_COLORS[r]} />
+        ))}
       </div>
 
-      {/* Cashout amount — shown only when Cashout is selected */}
       {form.result === "Cashout" && (
-        <div style={{ background: "#06b6d415", border: "1px solid #06b6d440", borderRadius: 8, padding: "10px 12px" }}>
-          <div style={{ fontSize: 10, color: "#06b6d4", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>
-            Montant net du cashout
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input
-              type="number" step="0.01"
-              placeholder="ex: -15.00 si perte, +20.00 si gain"
-              value={form.cashoutAmount}
-              onChange={e => set("cashoutAmount", e.target.value)}
-              style={{ flex: 1, background: T.card2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px 10px", color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box" }}
-            />
-            <span style={{ fontSize: 13, color: T.text2 }}>€</span>
-          </div>
-          <div style={{ fontSize: 10, color: T.text3, marginTop: 6 }}>
-            Saisis le gain net : négatif si tu as perdu de l'argent, positif si tu en as gagné
-          </div>
+        <div style={{ background: "#06b6d415", border: "1px solid #06b6d440", borderRadius: 8, padding: "8px 10px", display: "flex", alignItems: "center", gap: 8 }}>
+          <input type="number" step="0.01" placeholder="Gain net du cashout (ex: -15 ou +20)" value={form.cashoutAmount}
+            onChange={e => set("cashoutAmount", e.target.value)} style={{ ...smallInput, flex: 1, fontSize: 13 }} />
+          <span style={{ fontSize: 13, color: T.text2 }}>€</span>
         </div>
       )}
 
-        {/* Note */}
-        <Input label="Note (optional)" placeholder="Analysis, context..." value={form.note} onChange={(e) => set("note", e.target.value)} />
-      </>}
-
-      </div>
+      {/* Options repliables */}
+      <button onClick={() => setShowOpts(o => !o)}
+        style={{ background: "none", border: "none", color: T.text3, fontSize: 11, cursor: "pointer", textAlign: "left", padding: 0, fontWeight: 600, letterSpacing: 0.3 }}>
+        {showOpts ? "▾" : "▸"} Options (freebet, accounted, booster, note)
+      </button>
+      {showOpts && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <Chip label={form.isFreebet ? "Freebet ON" : "Freebet"} active={!!form.isFreebet} color="#7c3aed"
+              onClick={() => {
+                const v = !form.isFreebet;
+                onChange({ ...form, isFreebet: v, result: v && form.result === "Cashout" ? "Pending" : form.result });
+              }} />
+            <Chip label={form.alreadyAccounted ? "◈ Accounted ON" : "◈ Already accounted"} active={!!form.alreadyAccounted} color="#f0a500"
+              onClick={() => set("alreadyAccounted", !form.alreadyAccounted)} />
+          </div>
+          {form.subCat === "Parlay" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input type="number" step="0.1" min="0" max="100" placeholder="Combo booster %" value={form.comboBooster}
+                onChange={(e) => set("comboBooster", e.target.value)} style={{ ...smallInput, flex: 1, fontSize: 13 }} />
+              <div style={{ fontSize: 11, color: T.text3, whiteSpace: "nowrap" }}>
+                {form.comboBooster > 0 ? `+${((Number(form.odd) - 1) * Number(form.stakeE || 0) * Number(form.comboBooster) / 100).toFixed(2)}€ bonus` : "% bonus"}
+              </div>
+            </div>
+          )}
+          <input placeholder="Note (optionnel)" value={form.note} onChange={(e) => set("note", e.target.value)} style={smallInput} />
+        </div>
+      )}
     </div>
   );
 }
@@ -1364,7 +1296,7 @@ function BetForm({ index, form, onChange, onRemove, unitValue, canRemove }) {
 function AddTab({ batchForms, setBatchForms, handleSaveAll, editId, setEditId, setTab, emptyForm, unitValue, isDesktop, saving }) {
   const addForm = () => {
     const last = batchForms[batchForms.length - 1];
-    setBatchForms([...batchForms, emptyBetForm({ date: last.date, sport: last.sport, league: last.league, subCat: last.subCat, stakeE: last.stakeE, stakeU: last.stakeU, tipster: last.tipster }, unitValue)]);
+    setBatchForms([...batchForms, emptyBetForm({ date: last.date, sport: last.sport, league: last.league, subCat: last.subCat, stakeE: last.stakeE, stakeU: last.stakeU, tipster: last.tipster, book: last.book }, unitValue)]);
   };
   const updateForm = (i, val) => setBatchForms(batchForms.map((f, idx) => idx === i ? val : f));
   const removeForm = (i) => setBatchForms(batchForms.filter((_, idx) => idx !== i));
@@ -1516,7 +1448,7 @@ function ListTab({ bets, onEdit, onDelete, onUpdateResult, onExport, onImport, o
   }, [scrollToDate]);
 
   const sports = ["All", ...Object.keys(SPORTS_CONFIG)];
-  const statuses = ["All", "Pending", "Win", "Lose", "Void"];
+  const statuses = ["All", "Pending", "Win", "Lose", "Void", "Cashout"];
   const filtered = bets
     .filter(b => sportFilter === "All" || b.sport === sportFilter)
     .filter(b => bookFilter === "All" || (b.book || "Unknown") === bookFilter)
@@ -2266,12 +2198,12 @@ function StatsTab({ total, bySport, byLeague, bySubCat, byBook, byTipster, maxPr
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
           <div style={{ background: T.card2, borderRadius: 8, padding: "10px", textAlign: "center" }}>
             <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Bets</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{total.bets}</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{total.total}</div>
           </div>
           <div style={{ background: T.card2, borderRadius: 8, padding: "10px", textAlign: "center" }}>
             <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Win %</div>
             <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>
-              {total.bets > 0 ? (total.wins / total.bets * 100).toFixed(1) : "0.0"}%
+              {total.winRate.toFixed(1)}%
             </div>
           </div>
           <div style={{ background: T.card2, borderRadius: 8, padding: "10px", textAlign: "center" }}>
